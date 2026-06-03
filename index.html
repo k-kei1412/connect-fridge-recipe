@@ -860,35 +860,36 @@ function addShoppingMarkers(html){
 }
 
 /* ═══ GOOGLE IMAGE LINK ═══ */
-// "メイン"・"副菜X" など分類ワードを除外し、実際の料理名を検索対象にする
 const MENU_TYPE_PATTERN = /^(メイン|副菜|おかず|主菜|主食|汁物|サラダ|デザート)[１２３一二三\d]?$/;
+
+// 先頭の「〇品目」「第〇品」「〇.」「メイン：」などのプレフィックスを除去して料理名だけを返す
+function extractDishName(plain){
+  // Step1: 【】内の候補を収集し、分類ワードと数字のみを除外
+  const allBracket = [...plain.matchAll(/【([^】]+)】/g)].map(m => m[1].trim());
+  const dishCandidates = allBracket.filter(n => !MENU_TYPE_PATTERN.test(n) && !/^\d+$/.test(n));
+  if (dishCandidates.length > 0) return dishCandidates[0];
+
+  // Step2: 【】なしの場合、先頭の番号・分類ワードを除去して料理名を抽出
+  let text = plain.replace(/【[^】]+】/g, '').trim();
+  // "1品目：" "2品目 " などを除去
+  text = text.replace(/^\s*\d+\s*品目\s*[：:・\s]*/, '');
+  // "第1品" "第2皿" などを除去
+  text = text.replace(/^\s*第?\d+\s*[品皿つ個]\s*[：:・\s]*/, '');
+  // "1." "2)" "1、" などの番号を除去
+  text = text.replace(/^\s*\d+\s*[.。、)）]\s*/, '');
+  // "メイン：" "副菜1：" などの分類ワードを除去
+  text = text.replace(/^(メイン|副菜|おかず|主菜|主食|汁物|サラダ|デザート)[１２３一二三\d]?\s*[：:・\s]*/, '');
+  text = text.trim();
+
+  if (text && !MENU_TYPE_PATTERN.test(text)) return text;
+  return '';
+}
 
 function addGoogleImageLinks(html){
   return html.replace(/<h2([^>]*)>([\s\S]*?)<\/h2>/g,(match,attrs,inner)=>{
     const plain = inner.replace(/<[^>]+>/g,'').trim();
-
-    // 【】内の候補をすべて収集
-    const allBracket = [...plain.matchAll(/【([^】]+)】/g)].map(m=>m[1].trim());
-    // 分類ワードを除いた料理名候補
-    const dishCandidates = allBracket.filter(n=>!MENU_TYPE_PATTERN.test(n));
-
-    // 【】の外側のテキスト（余白・記号を除いた部分）
-    const outsideText = plain.replace(/【[^】]+】/g,'').replace(/[\s\d.。、:：・！!?？]/g,'').trim();
-
-    let searchName = '';
-    if (dishCandidates.length > 0) {
-      // フィルター後の最初の候補（実際の料理名）
-      searchName = dishCandidates[0];
-    } else if (outsideText && !MENU_TYPE_PATTERN.test(outsideText)) {
-      // 【】外のテキストが料理名の場合（例: "## 【メイン】から揚げ"）
-      searchName = outsideText;
-    } else if (allBracket.length > 0 && !MENU_TYPE_PATTERN.test(allBracket[allBracket.length-1])) {
-      // 最後の【】を試みる
-      searchName = allBracket[allBracket.length-1];
-    }
-
-    if (!searchName) return match; // 料理名が特定できなければリンクなし
-
+    const searchName = extractDishName(plain);
+    if (!searchName) return match;
     const url = `https://www.google.com/search?q=${encodeURIComponent(searchName)}&tbm=isch`;
     return `<h2${attrs}><a href="${url}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#f97316;text-underline-offset:3px;cursor:pointer;" title="Google画像で「${searchName}」を検索">${inner} 🔍</a></h2>`;
   });
