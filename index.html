@@ -829,6 +829,36 @@ function addUrgencyMarkers(html){
   );
 }
 
+/* ═══ SHOPPING MARKERS ═══ */
+const BASIC_SEASONINGS = /塩|砂糖|醤油|しょうゆ|みりん|料理酒|日本酒|酒|サラダ油|ごま油|オリーブ油|オリーブオイル|植物油|小麦粉|薄力粉|強力粉|片栗粉|だし|出汁|味噌|みそ|めんつゆ|白だし|顆粒だし|鶏ガラスープ|コンソメ|酢|こしょう|コショウ|胡椒|マヨネーズ|ケチャップ|ウスターソース|ポン酢|豆板醤|オイスターソース|ナンプラー|塩こうじ|はちみつ|蜂蜜|油|バター|水|お湯|湯/;
+
+function addShoppingMarkers(html){
+  const active = getActiveIngredients();
+  const fridgeNames = active.map(i => i.name);
+
+  // 材料セクション（<h3>材料〜次の<h3>）のみ対象
+  return html.replace(
+    /(<h3[^>]*>[^<]*材料[^<]*<\/h3>)([\s\S]*?)(?=<h3|$)/,
+    (match, h3tag, sectionContent) => {
+      const processed = sectionContent.replace(/<ul>([\s\S]*?)<\/ul>/g, (ulMatch, ulContent) => {
+        const markedItems = ulContent.replace(/<li>([\s\S]*?)<\/li>/g, (liMatch, content) => {
+          // タグを除いたテキストで判定
+          const plainText = content.replace(/<[^>]+>/g, '');
+          // 基本調味料は除外
+          if (BASIC_SEASONINGS.test(plainText)) return liMatch;
+          // 冷蔵庫に在庫あり → スキップ
+          const inFridge = fridgeNames.some(name => plainText.includes(name));
+          if (inFridge) return liMatch;
+          const badge = `<span style="display:inline-flex;align-items:center;gap:2px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;white-space:nowrap;">🛒 買い足し</span>`;
+          return `<li>${content}${badge}</li>`;
+        });
+        return `<ul>${markedItems}</ul>`;
+      });
+      return `${h3tag}${processed}`;
+    }
+  );
+}
+
 /* ═══ GOOGLE IMAGE LINK ═══ */
 // "メイン"・"副菜X" など分類ワードを除外し、実際の料理名を検索対象にする
 const MENU_TYPE_PATTERN = /^(メイン|副菜|おかず|主菜|主食|汁物|サラダ|デザート)[１２３一二三\d]?$/;
@@ -1028,7 +1058,7 @@ function parseRecipes(text){ const parts=text.split(/\n---+\n|^---+\n|\n---+$/m)
 
 function recipeCardHTML(recipe, i, showBackBtn){
   const saved=savedIndices.has(i);
-  const renderedHTML = addUrgencyMarkers(addGoogleImageLinks(marked.parse(recipe)));
+  const renderedHTML = addShoppingMarkers(addUrgencyMarkers(addGoogleImageLinks(marked.parse(recipe))));
   return `${showBackBtn?`<button onclick="renderAllRecipes()" style="display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;cursor:pointer;color:#6366f1;font-weight:700;font-size:13px;font-family:inherit;margin-bottom:12px;">← 全レシピに戻る</button>`:''}
   <div class="recipe-card">
     <div>${renderedHTML}</div>
