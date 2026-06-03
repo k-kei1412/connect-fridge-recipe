@@ -864,9 +864,10 @@ const MENU_TYPE_PATTERN = /^(メイン|副菜|おかず|主菜|主食|汁物|サ
 
 // 先頭の「〇品目」「第〇品」「〇.」「メイン：」などのプレフィックスを除去して料理名だけを返す
 function extractDishName(plain){
-  // Step1: 【】内の候補を収集し、分類ワードと数字のみを除外
+  // Step1: 【】内の候補を収集し、分類ワード・番号系・〇品目 を除外
   const allBracket = [...plain.matchAll(/【([^】]+)】/g)].map(m => m[1].trim());
-  const dishCandidates = allBracket.filter(n => !MENU_TYPE_PATTERN.test(n) && !/^\d+$/.test(n));
+  const SKIP_BRACKET = /^[\d１２３４５６７８９０]+品目$|^\d+$|^第?[\d１２３４５６７８９０]+[品皿つ個]$/;
+  const dishCandidates = allBracket.filter(n => !MENU_TYPE_PATTERN.test(n) && !SKIP_BRACKET.test(n));
   if (dishCandidates.length > 0) return dishCandidates[0];
 
   // Step2: 【】なしの場合、先頭の番号・分類ワードを除去して料理名を抽出
