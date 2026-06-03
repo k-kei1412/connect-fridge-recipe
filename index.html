@@ -8,7 +8,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; background: #f1f5f9; }
-    .panel { display: none; min-height: calc(100vh - 56px); padding-bottom: 8px; }
+    .panel { display: none; min-height: 100vh; padding-bottom: 80px; }
     .panel.active { display: block; }
     #bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #fff; border-top: 1px solid #e2e8f0; height: 56px; z-index: 100; }
     .nav-btn { flex: 1; border: none; background: transparent; cursor: pointer; font-size: 11px; font-weight: 600; color: #94a3b8; font-family: inherit; padding: 4px; }
@@ -231,6 +231,10 @@
         <button id="bento-btn" onclick="generate('bento')" disabled
           style="flex:1;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">🍱 弁当おかず</button>
       </div>
+      <button id="fridge-only-btn" onclick="generateFromFridge()"
+        style="width:100%;padding:12px;background:#6366f1;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;opacity:0.4;pointer-events:none;">
+        🥦 冷蔵庫の食材リストのみで作る
+      </button>
       <div id="recipe-loading" style="display:none;text-align:center;padding:32px;">
         <div class="recipe-spinner" style="width:40px;height:40px;border-width:4px;"></div>
         <p style="margin-top:12px;color:#64748b;font-size:13px;">AIがレシピを考えています…</p>
@@ -755,10 +759,16 @@ function buildFridgePromptSection(){
 function updateFridgeIndicator(){
   const active=getActiveIngredients(); const urgent=active.filter(i=>i.daysLeft<5);
   const el=document.getElementById('fridge-indicator'); if(!el)return;
-  if(!active.length){el.style.display='none';return;}
+  if(!active.length){el.style.display='none';updateFridgeOnlyBtn(false);return;}
   if(urgent.length){ el.innerHTML=`⚠️ 期限間近 <b>${urgent.length}品</b>：${urgent.map(i=>`${i.name}（あと${i.daysLeft}日）`).join('・')}を優先します`; el.className='fridge-indicator urgent'; }
   else { el.textContent=`✅ 冷蔵庫の食材 ${active.length}品をレシピ提案に活用します`; el.className='fridge-indicator normal'; }
   el.style.display='block';
+  updateFridgeOnlyBtn(true);
+}
+function updateFridgeOnlyBtn(enabled){
+  const btn=document.getElementById('fridge-only-btn'); if(!btn)return;
+  btn.style.opacity=enabled?'1':'0.4';
+  btn.style.pointerEvents=enabled?'auto':'none';
 }
 
 function useThisRecipe(recipeIndex){
@@ -772,6 +782,70 @@ function useThisRecipe(recipeIndex){
   toUse.forEach(item=>{ if(item.qty_whole>0)useWhole(item.rk,item.name); else if(item.qty_cut>0)useCut(item.rk,item.name); });
   refreshStockList(); updateFridgeIndicator(); showToast(`✅ ${toUse.length}種の食材を使用済みにしました`);
   setTimeout(()=>switchPanel('fridge'),1800);
+}
+
+/* ═══ FRIDGE-ONLY GENERATE ═══ */
+async function generateFromFridge(){
+  const apiKey=LS.get('api_key',''); const provider=LS.get('provider','gemini');
+  if(!apiKey){openRecipeSettings();return;}
+  const active=getActiveIngredients();
+  if(!active.length){showToast('❌ 冷蔵庫に食材がありません');return;}
+
+  currentMode='recipe';
+  document.getElementById('recipe-loading').style.display='block';
+  document.getElementById('recipe-box').style.display='none';
+  document.getElementById('recipe-error').style.display='none';
+  document.getElementById('gen-btn').disabled=true;
+  document.getElementById('bento-btn').disabled=true;
+
+  const urgent=active.filter(i=>i.daysLeft<5);
+  const normal=active.filter(i=>i.daysLeft>=5);
+  let ingList='';
+  if(urgent.length){ ingList+='⚠️ 期限が近い食材（必ず使ってください）:\n'; urgent.forEach(i=>{ingList+=`- ${i.name}（残り${i.daysLeft}日、${i.qty_whole+i.qty_cut}個）\n`;}); }
+  if(normal.length){ ingList+='その他の食材:\n'; normal.forEach(i=>{ingList+=`- ${i.name}\n`;}); }
+
+  const stepNote='各ステップには「具体的な分量」「調理器具」「火加減」「加熱時間」を明記してください。';
+  const prompt=`以下の冷蔵庫にある食材だけを使って、${servings}人分の料理を3品提案してください。
+リスト外の食材は一切使わないこと（塩・砂糖・油・醤油・みりん・酒などの基本調味料は使用可）。
+${urgent.length>0?'期限が近い食材は必ず1品以上に使ってください。':''}
+
+${ingList}
+
+各レシピは以下の形式で出力:
+---
+## 【料理名】
+**調理時間**: XX分
+### 材料（${servings}人分）
+- 食材名: 分量
+### 作り方
+${stepNote}
+1. Step
+---
+日本語で。`;
+
+  try {
+    let text;
+    if(provider==='gemini'){
+      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})});
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`);}
+      const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
+    } else {
+      const res=await fetch('https://api.openai.com/v1/chat/completions',
+        {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+          body:JSON.stringify({model:'gpt-4o',messages:[{role:'user',content:prompt}],max_tokens:4000})});
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(`OpenAI APIエラー(${res.status}): ${e?.error?.message||''}`);}
+      const d=await res.json(); text=d.choices?.[0]?.message?.content;
+    }
+    if(!text)throw new Error('AIからの返答が空でした');
+    showRecipes(text);
+  } catch(e){
+    document.getElementById('recipe-error').textContent=e.message||'不明なエラー';
+    document.getElementById('recipe-error').style.display='block';
+  } finally {
+    document.getElementById('recipe-loading').style.display='none';
+    updateRecipeGenBtn();
+  }
 }
 
 /* ═══ RECIPE: GENERATE ═══ */
@@ -887,6 +961,7 @@ function deleteHistoryItem(id){ if(!confirm('このレシピを削除します�
   refreshStockList(); updateBadge(); updateRecipeGenBtn();
   document.getElementById('sel-provider').value=LS.get('provider','gemini');
   document.getElementById('inp-key').value=LS.get('api_key','');
+  updateFridgeOnlyBtn(getActiveIngredients().length>0);
 })();
 </script>
 </body>
