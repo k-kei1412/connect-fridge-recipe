@@ -63,8 +63,11 @@
     .recipe-card h2 { font-size: 1.1rem; font-weight: 700; color: #ea580c; margin: 1rem 0 .4rem; }
     .recipe-card h3 { font-size: .95rem; font-weight: 600; color: #374151; margin: .8rem 0 .3rem; }
     .recipe-card p  { margin: .3rem 0; line-height: 1.7; font-size: .9rem; }
-    .recipe-card ul, .recipe-card ol { padding-left: 1.4rem; margin: .3rem 0; }
-    .recipe-card li { margin: .2rem 0; line-height: 1.7; font-size: .9rem; }
+    .recipe-card ul { padding-left: 1.4rem; margin: .3rem 0; }
+    .recipe-card ul li { margin: .2rem 0; line-height: 1.7; font-size: .9rem; }
+    .recipe-card ol { padding-left: 0; list-style: none; counter-reset: step-counter; margin: .5rem 0; }
+    .recipe-card ol li { counter-increment: step-counter; position: relative; padding: .7rem .9rem .7rem 2.9rem; background: #fff7ed; border-left: 3px solid #f97316; border-radius: 0 8px 8px 0; margin: .5rem 0; line-height: 1.75; font-size: .9rem; }
+    .recipe-card ol li::before { content: counter(step-counter); position: absolute; left: .45rem; top: .65rem; background: #f97316; color: #fff; font-weight: 700; font-size: .65rem; width: 1.35rem; height: 1.35rem; border-radius: 50%; text-align: center; line-height: 1.35rem; }
     .recipe-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid #f3f4f6; }
     .btn-make { background: #22c55e; color: #fff; border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .btn-save-sm { background: #fbbf24; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
@@ -231,6 +234,10 @@
         <button id="bento-btn" onclick="generate('bento')" disabled
           style="flex:1;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">🍱 弁当おかず</button>
       </div>
+      <button id="input-only-btn" onclick="generateFromInput()"
+        style="width:100%;padding:12px;background:#d97706;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px;opacity:0.4;pointer-events:none;">
+        📝 入力した食材のみで作る
+      </button>
       <button id="fridge-only-btn" onclick="generateFromFridge()"
         style="width:100%;padding:12px;background:#6366f1;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;opacity:0.4;pointer-events:none;">
         🥦 冷蔵庫の食材リストのみで作る
@@ -696,8 +703,13 @@ function renderChips(){
   c.innerHTML=ingredients.map((n,i)=>`<span class="chip"><span>${escHtml(n)}</span><button class="chip-del" onclick="removeIngredient(${i})">×</button></span>`).join('')+'<span id="ing-empty" style="display:none;"></span>';
 }
 function updateRecipeGenBtn(){
-  const has=recipeImages.length>0||ingredients.length>0||(document.getElementById('extra-ingredients')?.value||'').trim().length>0||getActiveIngredients().length>0;
-  document.getElementById('gen-btn').disabled=!has; document.getElementById('bento-btn').disabled=!has;
+  const extra=(document.getElementById('extra-ingredients')?.value||'').trim();
+  const hasInput=recipeImages.length>0||ingredients.length>0||extra.length>0||getActiveIngredients().length>0;
+  const hasManual=ingredients.length>0||extra.length>0;
+  document.getElementById('gen-btn').disabled=!hasInput;
+  document.getElementById('bento-btn').disabled=!hasInput;
+  const ib=document.getElementById('input-only-btn');
+  if(ib){ib.style.opacity=hasManual?'1':'0.4';ib.style.pointerEvents=hasManual?'auto':'none';}
 }
 
 // Recipe images
@@ -772,16 +784,87 @@ function updateFridgeOnlyBtn(enabled){
 }
 
 function useThisRecipe(recipeIndex){
-  const recipe=currentRecipes[recipeIndex]; const active=getActiveIngredients();
-  if(!active.length){showToast('冷蔵庫に食材がありません');return;}
-  const matMatch=recipe.match(/###\s*材料[\s\S]*?(?=###|$)/); const searchIn=matMatch?matMatch[0]:recipe;
+  // まずこのレシピだけを表示
+  renderSingleRecipe(recipeIndex);
+
+  // 冷蔵庫の食材と照合して減算
+  const recipe=currentRecipes[recipeIndex];
+  const active=getActiveIngredients();
+  if(!active.length)return;
+  const matMatch=recipe.match(/###\s*材料[\s\S]*?(?=###|$)/);
+  const searchIn=matMatch?matMatch[0]:recipe;
   const toUse=active.filter(item=>searchIn.includes(item.name));
-  if(!toUse.length){showToast('冷蔵庫の食材との一致が見つかりませんでした');return;}
+  if(!toUse.length)return;
   const nameList=toUse.map(i=>`・${i.name}（残り${i.daysLeft}日）`).join('\n');
-  if(!confirm(`以下の食材を冷蔵庫から1個ずつ使用済みにしますか？\n\n${nameList}`))return;
+  if(!confirm(`以下の食材を冷蔵庫から使用済みにしますか？\n\n${nameList}`))return;
   toUse.forEach(item=>{ if(item.qty_whole>0)useWhole(item.rk,item.name); else if(item.qty_cut>0)useCut(item.rk,item.name); });
-  refreshStockList(); updateFridgeIndicator(); showToast(`✅ ${toUse.length}種の食材を使用済みにしました`);
-  setTimeout(()=>switchPanel('fridge'),1800);
+  refreshStockList(); updateFridgeIndicator();
+  showToast(`✅ ${toUse.length}種の食材を使用済みにしました`);
+}
+
+/* ═══ GOOGLE IMAGE LINK ═══ */
+function addGoogleImageLinks(html){
+  return html.replace(/<h2([^>]*)>([\s\S]*?)<\/h2>/g,(match,attrs,inner)=>{
+    const plain=inner.replace(/<[^>]+>/g,'').trim();
+    const m=plain.match(/【([^】]+)】/); if(!m)return match;
+    const name=m[1].trim();
+    const url=`https://www.google.com/search?q=${encodeURIComponent(name)}&tbm=isch`;
+    return `<h2${attrs}><a href="${url}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#f97316;text-underline-offset:3px;cursor:pointer;" title="Google画像で「${name}」を検索">${inner} 🔍</a></h2>`;
+  });
+}
+
+/* ═══ INPUT-ONLY GENERATE ═══ */
+async function generateFromInput(){
+  const apiKey=LS.get('api_key',''); const provider=LS.get('provider','gemini');
+  if(!apiKey){openRecipeSettings();return;}
+  const extra=(document.getElementById('extra-ingredients').value||'').trim();
+  if(!ingredients.length&&!extra){showToast('❌ 食材リストに食材を追加してください');return;}
+
+  currentMode='recipe';
+  document.getElementById('recipe-loading').style.display='block';
+  document.getElementById('recipe-box').style.display='none';
+  document.getElementById('recipe-error').style.display='none';
+  document.getElementById('gen-btn').disabled=true; document.getElementById('bento-btn').disabled=true;
+
+  const ingList=ingredients.map(i=>`- ${i}`).join('\n');
+  const extraLine=extra?`\nリクエスト:\n${extra}\n`:'';
+  const stepNote='各ステップには「具体的な分量」「調理器具」「火加減」「加熱時間」を明記してください。';
+  const prompt=`以下の食材だけを使って、${servings}人分の料理を3品提案してください。
+リスト外の食材は使わないこと（塩・砂糖・油・醤油・みりん・酒などの基本調味料は使用可）。
+
+使える食材:
+${ingList}${extraLine}
+
+各レシピは以下の形式で出力:
+---
+## 【料理名】
+**調理時間**: XX分
+### 材料（${servings}人分）
+- 食材名: 分量
+### 作り方
+${stepNote}
+1. Step
+---
+日本語で。`;
+
+  try {
+    let text;
+    if(provider==='gemini'){
+      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})});
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`);}
+      const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
+    } else {
+      const res=await fetch('https://api.openai.com/v1/chat/completions',
+        {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+          body:JSON.stringify({model:'gpt-4o',messages:[{role:'user',content:prompt}],max_tokens:4000})});
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(`OpenAI APIエラー(${res.status}): ${e?.error?.message||''}`);}
+      const d=await res.json(); text=d.choices?.[0]?.message?.content;
+    }
+    if(!text)throw new Error('AIからの返答が空でした');
+    showRecipes(text);
+  } catch(e){ document.getElementById('recipe-error').textContent=e.message||'不明なエラー'; document.getElementById('recipe-error').style.display='block'; }
+  finally{ document.getElementById('recipe-loading').style.display='none'; updateRecipeGenBtn(); }
 }
 
 /* ═══ FRIDGE-ONLY GENERATE ═══ */
@@ -892,17 +975,32 @@ async function generate(mode){
 /* ═══ RECIPE: DISPLAY ═══ */
 function parseRecipes(text){ const parts=text.split(/\n---+\n|^---+\n|\n---+$/m); const r=parts.map(s=>s.trim()).filter(s=>s.length>0&&/##\s*【/.test(s)); return r.length>0?r:[text.trim()]; }
 
+function recipeCardHTML(recipe, i, showBackBtn){
+  const saved=savedIndices.has(i);
+  return `${showBackBtn?`<button onclick="renderAllRecipes()" style="display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;cursor:pointer;color:#6366f1;font-weight:700;font-size:13px;font-family:inherit;margin-bottom:12px;">← 全レシピに戻る</button>`:''}
+  <div class="recipe-card">
+    <div>${addGoogleImageLinks(marked.parse(recipe))}</div>
+    <div class="recipe-card-footer">
+      ${showBackBtn?'<span></span>':`<button class="btn-make" onclick="useThisRecipe(${i})">🍳 これを作る！</button>`}
+      <button class="btn-save-sm" id="save-btn-${i}" onclick="saveRecipe(${i})" ${saved?'disabled':''}>
+        ${saved?'✓ 保存済み':'⭐ 保存'}
+      </button>
+    </div>
+  </div>`;
+}
+
 function showRecipes(text){
   currentRecipes=parseRecipes(text); savedIndices=new Set();
-  document.getElementById('recipe-content').innerHTML=currentRecipes.map((recipe,i)=>`
-    <div class="recipe-card">
-      <div>${marked.parse(recipe)}</div>
-      <div class="recipe-card-footer">
-        <button class="btn-make" onclick="useThisRecipe(${i})">🍳 これを作る！</button>
-        <button class="btn-save-sm" id="save-btn-${i}" onclick="saveRecipe(${i})">⭐ 保存</button>
-      </div>
-    </div>`).join('');
+  renderAllRecipes();
   document.getElementById('recipe-box').style.display='block';
+}
+
+function renderAllRecipes(){
+  document.getElementById('recipe-content').innerHTML=currentRecipes.map((r,i)=>recipeCardHTML(r,i,false)).join('');
+}
+
+function renderSingleRecipe(index){
+  document.getElementById('recipe-content').innerHTML=recipeCardHTML(currentRecipes[index],index,true);
 }
 
 /* ═══ RECIPE: SAVE / HISTORY ═══ */
