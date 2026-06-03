@@ -802,14 +802,65 @@ function useThisRecipe(recipeIndex){
   showToast(`✅ ${toUse.length}種の食材を使用済みにしました`);
 }
 
+/* ═══ URGENCY MARKERS ═══ */
+function addUrgencyMarkers(html){
+  const urgent = getActiveIngredients().filter(i => i.daysLeft < 5);
+  if (!urgent.length) return html;
+
+  const makeBadge = (item) => {
+    const daysText = item.daysLeft <= 0 ? '今日が期限！' : `あと${item.daysLeft}日`;
+    return `<span style="display:inline-flex;align-items:center;gap:2px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;white-space:nowrap;">⚠️ 期限間近・${daysText}</span>`;
+  };
+
+  // 「材料」を含む<h3>〜次の<h3>の間だけを対象にする
+  return html.replace(
+    /(<h3[^>]*>[^<]*材料[^<]*<\/h3>)([\s\S]*?)(?=<h3|$)/,
+    (match, h3tag, sectionContent) => {
+      const processed = sectionContent.replace(/<ul>([\s\S]*?)<\/ul>/g, (ulMatch, ulContent) => {
+        const markedItems = ulContent.replace(/<li>([\s\S]*?)<\/li>/g, (liMatch, content) => {
+          const found = urgent.find(item => content.includes(item.name));
+          if (!found) return liMatch;
+          return `<li>${content}${makeBadge(found)}</li>`;
+        });
+        return `<ul>${markedItems}</ul>`;
+      });
+      return `${h3tag}${processed}`;
+    }
+  );
+}
+
 /* ═══ GOOGLE IMAGE LINK ═══ */
+// "メイン"・"副菜X" など分類ワードを除外し、実際の料理名を検索対象にする
+const MENU_TYPE_PATTERN = /^(メイン|副菜|おかず|主菜|主食|汁物|サラダ|デザート)[１２３一二三\d]?$/;
+
 function addGoogleImageLinks(html){
   return html.replace(/<h2([^>]*)>([\s\S]*?)<\/h2>/g,(match,attrs,inner)=>{
-    const plain=inner.replace(/<[^>]+>/g,'').trim();
-    const m=plain.match(/【([^】]+)】/); if(!m)return match;
-    const name=m[1].trim();
-    const url=`https://www.google.com/search?q=${encodeURIComponent(name)}&tbm=isch`;
-    return `<h2${attrs}><a href="${url}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#f97316;text-underline-offset:3px;cursor:pointer;" title="Google画像で「${name}」を検索">${inner} 🔍</a></h2>`;
+    const plain = inner.replace(/<[^>]+>/g,'').trim();
+
+    // 【】内の候補をすべて収集
+    const allBracket = [...plain.matchAll(/【([^】]+)】/g)].map(m=>m[1].trim());
+    // 分類ワードを除いた料理名候補
+    const dishCandidates = allBracket.filter(n=>!MENU_TYPE_PATTERN.test(n));
+
+    // 【】の外側のテキスト（余白・記号を除いた部分）
+    const outsideText = plain.replace(/【[^】]+】/g,'').replace(/[\s\d.。、:：・！!?？]/g,'').trim();
+
+    let searchName = '';
+    if (dishCandidates.length > 0) {
+      // フィルター後の最初の候補（実際の料理名）
+      searchName = dishCandidates[0];
+    } else if (outsideText && !MENU_TYPE_PATTERN.test(outsideText)) {
+      // 【】外のテキストが料理名の場合（例: "## 【メイン】から揚げ"）
+      searchName = outsideText;
+    } else if (allBracket.length > 0 && !MENU_TYPE_PATTERN.test(allBracket[allBracket.length-1])) {
+      // 最後の【】を試みる
+      searchName = allBracket[allBracket.length-1];
+    }
+
+    if (!searchName) return match; // 料理名が特定できなければリンクなし
+
+    const url = `https://www.google.com/search?q=${encodeURIComponent(searchName)}&tbm=isch`;
+    return `<h2${attrs}><a href="${url}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#f97316;text-underline-offset:3px;cursor:pointer;" title="Google画像で「${searchName}」を検索">${inner} 🔍</a></h2>`;
   });
 }
 
@@ -977,9 +1028,10 @@ function parseRecipes(text){ const parts=text.split(/\n---+\n|^---+\n|\n---+$/m)
 
 function recipeCardHTML(recipe, i, showBackBtn){
   const saved=savedIndices.has(i);
+  const renderedHTML = addUrgencyMarkers(addGoogleImageLinks(marked.parse(recipe)));
   return `${showBackBtn?`<button onclick="renderAllRecipes()" style="display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 14px;cursor:pointer;color:#6366f1;font-weight:700;font-size:13px;font-family:inherit;margin-bottom:12px;">← 全レシピに戻る</button>`:''}
   <div class="recipe-card">
-    <div>${addGoogleImageLinks(marked.parse(recipe))}</div>
+    <div>${renderedHTML}</div>
     <div class="recipe-card-footer">
       ${showBackBtn?'<span></span>':`<button class="btn-make" onclick="useThisRecipe(${i})">🍳 これを作る！</button>`}
       <button class="btn-save-sm" id="save-btn-${i}" onclick="saveRecipe(${i})" ${saved?'disabled':''}>
