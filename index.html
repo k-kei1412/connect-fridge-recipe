@@ -1028,7 +1028,7 @@ function renderHistory(){
       </div>
       ${tagHtml?`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">${tagHtml}</div>`:''}
       <div id="h-${entry.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #f3f4f6;">
-        <div style="font-size:14px;line-height:1.7;">${marked.parse(entry.content)}</div>
+        <div style="font-size:14px;line-height:1.7;">${addGoogleImageLinks(marked.parse(entry.content))}</div>
         <button onclick="deleteHistoryItem('${entry.id}')" style="margin-top:8px;font-size:12px;color:#ef4444;background:none;border:none;cursor:pointer;">🗑️ 削除</button>
       </div>
     </div>`;
