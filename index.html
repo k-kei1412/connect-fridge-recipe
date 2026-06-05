@@ -5,16 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>冷蔵庫管理 &amp; レシピAI</title>
   <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; background: #f1f5f9; }
-    .panel { display: none; min-height: 100vh; padding-bottom: 80px; }
+    .panel { display: none; min-height: 100vh; padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
     .panel.active { display: block; }
-    #bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #fff; border-top: 1px solid #e2e8f0; height: 56px; z-index: 100; }
-    .nav-btn { flex: 1; border: none; background: transparent; cursor: pointer; font-size: 11px; font-weight: 600; color: #94a3b8; font-family: inherit; padding: 4px; }
-    .nav-btn .nav-icon { font-size: 22px; display: block; }
+    #bottom-nav { position: fixed; bottom: env(safe-area-inset-bottom, 0px); left: 12px; right: 12px; display: flex; background: #fff; border-radius: 22px; box-shadow: 0 4px 24px rgba(0,0,0,.15); height: 66px; z-index: 100; }
+    .nav-btn { flex: 1; border: none; background: transparent; cursor: pointer; font-size: 11px; font-weight: 600; color: #94a3b8; font-family: inherit; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+    .nav-btn .nav-icon { font-size: 24px; line-height: 1; }
     .nav-btn.active { color: #f97316; }
-    .nav-btn:first-child.active { color: #0ea5e9; }
+    #nav-fridge.active   { color: #0ea5e9; }
+    #nav-shopping.active { color: #10b981; }
+    .settings-btn { background: rgba(255,255,255,.18); border: none; color: #fff; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 17px; display:flex;align-items:center;justify-content:center; flex-shrink:0; }
+    .shop-item { display:flex;align-items:center;gap:10px;background:#fff;border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.06); }
+    .shop-item.checked .shop-name { text-decoration:line-through;color:#94a3b8; }
+    .shop-cb { width:20px;height:20px;flex-shrink:0;cursor:pointer;accent-color:#10b981; }
+    .dup-badge { display:inline-flex;align-items:center;background:#fef3c7;color:#d97706;border:1px solid #fde68a;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle; }
     .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     .btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 10px; }
     .btn:disabled { background: #94a3b8 !important; cursor: not-allowed; }
@@ -72,7 +80,7 @@
     .btn-make { background: #22c55e; color: #fff; border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .btn-save-sm { background: #fbbf24; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
     .btn-save-sm:disabled { background: #d1d5db; cursor: not-allowed; }
-    #toast { position: fixed; bottom: 68px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 200; opacity: 0; transition: opacity .3s; white-space: nowrap; pointer-events: none; }
+    #toast { position: fixed; bottom: calc(74px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 200; opacity: 0; transition: opacity .3s; white-space: nowrap; pointer-events: none; }
     #toast.show { opacity: 1; }
     #fridge-loading-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.7); z-index: 150; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
     #fridge-loading-overlay.show { display: flex; }
@@ -99,7 +107,7 @@
 <div id="panel-fridge" class="panel active">
   <div class="fridge-header">
     <h1>🥦 冷蔵庫在庫管理</h1>
-    <button class="icon-btn" onclick="openFridgeSettings()">⚙️</button>
+    <button class="settings-btn" onclick="switchPanel('settings')" title="設定">⚙️</button>
   </div>
   <div class="fridge-main">
     <div class="card">
@@ -156,7 +164,7 @@
 <div id="panel-recipe" class="panel">
   <div class="recipe-header">
     <h1>🍱 レシピ提案AI</h1>
-    <button onclick="openRecipeSettings()" style="background:none;border:none;font-size:20px;cursor:pointer;">⚙️</button>
+    <button onclick="switchPanel('settings')" style="background:none;border:none;font-size:20px;cursor:pointer;" title="設定">⚙️</button>
   </div>
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="main" onclick="switchRecipeTab('main')">📸 レシピ生成</button>
@@ -167,14 +175,18 @@
   <div class="recipe-main">
     <!-- Tab: 生成 -->
     <div id="tab-main">
+
+      <!-- ① 冷蔵庫インジケーター -->
       <div id="fridge-indicator" class="fridge-indicator"></div>
-      <!-- 写真 -->
+
+      <!-- ② 写真 -->
       <div class="card">
+        <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px;">📷 写真から食材認識（任意）</div>
         <div class="drop-zone" id="recipe-drop-zone"
              ondragover="onRecipeDragOver(event)" ondragleave="onRecipeDragLeave()" ondrop="onRecipeDrop(event)">
           <div id="recipe-up-ph" style="text-align:center;">
-            <div style="font-size:36px;margin-bottom:6px;">📷</div>
-            <p style="font-size:13px;color:#9ca3af;">写真を選択（任意）</p>
+            <div style="font-size:32px;margin-bottom:4px;">📷</div>
+            <p style="font-size:12px;color:#9ca3af;">写真を選択（任意）</p>
           </div>
           <div id="recipe-thumb-grid" style="display:none;flex-wrap:wrap;gap:8px;padding:4px;"></div>
         </div>
@@ -182,14 +194,15 @@
         <input id="recipe-camera-input" type="file" accept="image/*" capture="environment" style="display:none" onchange="onRecipeFileSelect(event)">
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button onclick="document.getElementById('recipe-camera-input').click()"
-            style="flex:1;padding:10px;background:#f97316;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">📷 カメラ</button>
+            style="flex:1;padding:9px;background:#f97316;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">📷 カメラ</button>
           <button onclick="document.getElementById('recipe-file-input').click()"
-            style="flex:1;padding:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;font-family:inherit;">🖼️ アルバム</button>
+            style="flex:1;padding:9px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;font-family:inherit;">🖼️ アルバム</button>
           <button id="recipe-clear-btn" onclick="clearRecipeImages()"
-            style="display:none;padding:10px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;">全削除</button>
+            style="display:none;padding:9px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;">全削除</button>
         </div>
       </div>
-      <!-- 食材リスト -->
+
+      <!-- ③ 食材リスト -->
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <span style="font-size:13px;font-weight:700;">🥬 食材リスト</span>
@@ -210,14 +223,29 @@
             style="background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">＋</button>
         </div>
       </div>
-      <!-- リクエスト -->
-      <div class="card">
-        <label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px;">📝 リクエスト・コメント</label>
-        <textarea id="extra-ingredients" rows="2" placeholder="例: 辛め・揚げ物は避けたい"
-          style="width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:8px;font-size:13px;resize:none;outline:none;font-family:inherit;"
-          oninput="updateRecipeGenBtn()"></textarea>
+
+      <!-- ④ コメント ＋ アレルギー（統合カード・料理名も兼用） -->
+      <div class="card" style="border-left:4px solid #6366f1;background:linear-gradient(135deg,#f5f3ff 0%,#fff 70%);">
+        <label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px;color:#4f46e5;">
+          📝 料理名・リクエスト・コメント
+          <span style="font-weight:400;font-size:11px;color:#94a3b8;margin-left:5px;">（全ボタン＆提案に反映）</span>
+        </label>
+        <p style="font-size:11px;color:#818cf8;margin-bottom:6px;">料理名を書く → 基本レシピ＋アレンジ2品を提案｜リクエストのみ → 食材ベースで提案</p>
+        <textarea id="extra-ingredients" rows="3"
+          placeholder="例①: 唐揚げ&#10;例②: 唐揚げ、衣はサクサクで子供向け&#10;例③: 辛め・揚げ物は避けたい・15分以内"
+          style="width:100%;border:1.5px solid #c7d2fe;border-radius:8px;padding:9px;font-size:13px;resize:none;outline:none;font-family:inherit;background:#fafafe;margin-bottom:10px;"
+          oninput="updateRecipeGenBtn();updateDishNameBtn()"></textarea>
+        <label style="display:block;font-size:13px;font-weight:700;margin-bottom:5px;color:#4f46e5;">🚫 アレルギー・除外食材</label>
+        <input id="allergy-input" type="text" placeholder="例: えび・ナッツ・卵・乳製品（絶対に使わない食材）"
+          style="width:100%;border:1.5px solid #fecdd3;border-radius:8px;padding:9px 12px;font-size:13px;outline:none;font-family:inherit;background:#fff5f5;margin-bottom:12px;"
+          oninput="updateRecipeGenBtn()">
+        <button id="dish-propose-btn" onclick="generateByName()"
+          style="width:100%;padding:12px;background:#6366f1;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;opacity:0.35;pointer-events:none;transition:opacity .2s;">
+          🍽️ この内容でレシピを提案（基本＋アレンジ）
+        </button>
       </div>
-      <!-- 人数 -->
+
+      <!-- ⑤ 人数 -->
       <div class="card">
         <div style="font-size:13px;font-weight:700;margin-bottom:8px;">👥 人数</div>
         <div style="display:flex;gap:6px;">
@@ -227,7 +255,8 @@
           <button class="serving-btn" data-n="4" onclick="setServings(4)">4人</button>
         </div>
       </div>
-      <!-- 生成ボタン -->
+
+      <!-- ⑥ 生成ボタン群 -->
       <div style="display:flex;gap:8px;margin-bottom:8px;">
         <button id="gen-btn" onclick="generate('recipe')" disabled
           style="flex:1;padding:14px;background:#f97316;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">🍳 レシピを生成</button>
@@ -235,12 +264,8 @@
           style="flex:1;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">🍱 弁当おかず</button>
       </div>
       <button id="input-only-btn" onclick="generateFromInput()"
-        style="width:100%;padding:12px;background:#d97706;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px;opacity:0.4;pointer-events:none;">
+        style="width:100%;padding:11px;background:#d97706;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;opacity:0.4;pointer-events:none;">
         📝 入力した食材のみで作る
-      </button>
-      <button id="fridge-only-btn" onclick="generateFromFridge()"
-        style="width:100%;padding:12px;background:#6366f1;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;opacity:0.4;pointer-events:none;">
-        🥦 冷蔵庫の食材リストのみで作る
       </button>
       <div id="recipe-loading" style="display:none;text-align:center;padding:32px;">
         <div class="recipe-spinner" style="width:40px;height:40px;border-width:4px;"></div>
@@ -267,6 +292,112 @@
   </div>
 </div>
 
+<!-- ══════════ SHOPPING PANEL ══════════ -->
+<div id="panel-shopping" class="panel">
+  <div style="background:#10b981;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;">
+    <h1 style="font-size:16px;font-weight:700;">🛒 買い物リスト</h1>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span id="shop-count-badge" style="display:none;background:rgba(255,255,255,.25);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;"></span>
+      <button class="settings-btn" onclick="switchPanel('settings')" title="設定">⚙️</button>
+    </div>
+  </div>
+  <div style="max-width:640px;margin:0 auto;padding:12px;">
+    <div class="card">
+      <div style="display:flex;gap:6px;">
+        <input id="shop-input" type="text" placeholder="食材名を入力して追加"
+          style="flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;font-family:inherit;"
+          onkeydown="if(event.key==='Enter'){addToShoppingListManual();event.preventDefault()}">
+        <button onclick="addToShoppingListManual()"
+          style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">＋</button>
+      </div>
+      <p style="font-size:11px;color:#94a3b8;margin-top:6px;">レシピ画面の「🛒 買い足し」をタップしてもリストに追加できます</p>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button onclick="clearCheckedItems()"
+        style="flex:1;padding:9px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#64748b;">✅ 購入済みを削除</button>
+      <button onclick="clearAllShoppingItems()"
+        style="flex:1;padding:9px;background:#fff;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#ef4444;">🗑️ 全削除</button>
+    </div>
+    <div id="shopping-list"></div>
+  </div>
+</div>
+
+<!-- ══════════ SETTINGS PANEL ══════════ -->
+<div id="panel-settings" class="panel">
+  <div style="background:#6366f1;color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50;">
+    <button onclick="history.back?switchPanel(document._lastPanel||'fridge'):switchPanel('fridge')" id="settings-back-btn"
+      style="background:rgba(255,255,255,.18);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" title="戻る">‹</button>
+    <h1 style="font-size:16px;font-weight:700;">⚙️ 設定</h1>
+  </div>
+  <div style="max-width:640px;margin:0 auto;padding:12px;">
+    <div class="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm mx-auto my-4">
+      <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center">
+        <i class="fa-solid fa-key text-amber-500 mr-2"></i>Gemini APIキーの設定・作成方法
+      </h2>
+      <p class="text-sm text-slate-600 mb-4 leading-relaxed">
+        本アプリの「写真読み取り」や「レシピ提案AI」を利用するには、Google AI Studioで無料発行できるGeminiのAPIキーが必要です。以下の手順に従って取得し、下の入力欄に保存してください。
+      </p>
+      <div class="bg-slate-50 rounded-xl p-4 mb-4 text-xs text-slate-700 space-y-3 border border-slate-100">
+        <h3 class="font-bold text-slate-900 flex items-center">
+          <i class="fa-solid fa-circle-info text-blue-500 mr-1.5"></i>APIキーの取得ステップ
+        </h3>
+        <ol class="list-decimal list-inside space-y-2 leading-relaxed">
+          <li>
+            <a href="https://aistudio.google.com/" target="_blank" class="text-blue-600 hover:underline font-semibold inline-flex items-center">
+              Google AI Studio <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[10px]"></i>
+            </a> にアクセスし、Googleアカウントでログインします。
+          </li>
+          <li>
+            画面右上にある<span class="font-bold text-slate-900">「APIキーを作成 (Create API key)」</span>をクリックします。
+          </li>
+          <li>
+            <span class="font-bold text-slate-900">「既存のプロジェクトを選択 (Create API key in an existing project)」</span>、または「+プロジェクトの作成」を選び、任意の名前を設定します。
+            <p class="text-[11px] text-amber-600 mt-1 font-medium pl-4">
+              ⚠️ ※「プロジェクトの上限エラー」が出る場合は、新規作成ではなく、リストにある「既存のプロジェクト」をどれか一つ選択してください。
+            </p>
+          </li>
+          <li>
+            <span class="font-bold text-slate-900">「キーを作成 (Create API key)」</span>をクリックします。
+          </li>
+          <li>
+            生成された<span class="font-bold text-slate-900">「キーをコピー (Copy)」</span>をクリックして取得完了です。
+          </li>
+        </ol>
+      </div>
+      <div class="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 text-xs text-slate-700 space-y-2">
+        <h3 class="font-bold text-emerald-900 flex items-center">
+          <i class="fa-solid fa-circle-check text-emerald-600 mr-1.5"></i>アプリへの登録方法
+        </h3>
+        <p class="leading-relaxed">
+          1. コピーしたキーを、下記の「APIキー入力欄」に貼り付けます。<br>
+          2. <span class="font-bold text-emerald-800">「保存する」</span>ボタンをクリックすれば設定完了です。
+        </p>
+      </div>
+      <div class="mt-6 pt-4 border-t border-slate-100 space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">AIプロバイダー</label>
+          <select id="settings-provider" onchange="onSettingsProviderChange()"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition">
+            <option value="gemini">Gemini 2.5 Flash（推奨・無料）</option>
+            <option value="openai">OpenAI GPT-4o</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">API Key</label>
+          <div class="flex gap-2">
+            <input type="password" id="api-key-input" placeholder="AIzaSy..."
+              class="flex-grow bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 transition">
+            <button onclick="saveApiKey()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm px-5 py-2 rounded-xl transition shadow-sm">
+              保存する
+            </button>
+          </div>
+        </div>
+        <p id="settings-save-ok" style="display:none;font-size:12px;color:#16a34a;font-weight:600;text-align:center;">✓ 保存しました！</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════ BOTTOM NAV ══════════ -->
 <nav id="bottom-nav">
   <button class="nav-btn active" id="nav-fridge" onclick="switchPanel('fridge')">
@@ -274,6 +405,9 @@
   </button>
   <button class="nav-btn" id="nav-recipe" onclick="switchPanel('recipe')">
     <span class="nav-icon">🍳</span>レシピAI
+  </button>
+  <button class="nav-btn" id="nav-shopping" onclick="switchPanel('shopping')">
+    <span class="nav-icon">🛒</span>買い物<span id="shop-nav-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:999px;padding:0 4px;margin-left:1px;vertical-align:middle;"></span>
   </button>
 </nav>
 
@@ -337,13 +471,30 @@
 
 <script>
 /* ═══ PANEL SWITCHING ═══ */
+let _lastPanel = 'fridge';
 function switchPanel(panel) {
-  document.getElementById('panel-fridge').classList.toggle('active', panel === 'fridge');
-  document.getElementById('panel-recipe').classList.toggle('active', panel === 'recipe');
-  document.getElementById('nav-fridge').classList.toggle('active', panel === 'fridge');
-  document.getElementById('nav-recipe').classList.toggle('active', panel === 'recipe');
+  const mainPanels = ['fridge','recipe','shopping'];
+  // 設定を開く前のパネルを記憶
+  if (panel === 'settings') {
+    const cur = mainPanels.find(p => document.getElementById('panel-'+p).classList.contains('active'));
+    if (cur) _lastPanel = cur;
+  }
+  ['fridge','recipe','shopping','settings'].forEach(p => {
+    document.getElementById('panel-'+p).classList.toggle('active', panel === p);
+    const nav = document.getElementById('nav-'+p);
+    if (nav) nav.classList.toggle('active', panel === p);
+  });
   window.scrollTo(0, 0);
-  if (panel === 'recipe') updateFridgeIndicator();
+  if (panel === 'recipe')   updateFridgeIndicator();
+  if (panel === 'shopping') { cleanupExpiredShopItems(); renderShoppingList(); }
+  if (panel === 'settings') {
+    const k = getFridgeApiKey();
+    document.getElementById('api-key-input').value = k || '';
+    document.getElementById('settings-provider').value = LS.get('provider','gemini');
+    document.getElementById('settings-save-ok').style.display = 'none';
+    // 戻るボタンにパネルを紐付け
+    document.getElementById('settings-back-btn').onclick = () => switchPanel(_lastPanel);
+  }
 }
 
 /* ═══ SHARED UTILS ═══ */
@@ -703,12 +854,12 @@ function renderChips(){
   c.innerHTML=ingredients.map((n,i)=>`<span class="chip"><span>${escHtml(n)}</span><button class="chip-del" onclick="removeIngredient(${i})">×</button></span>`).join('')+'<span id="ing-empty" style="display:none;"></span>';
 }
 function updateRecipeGenBtn(){
-  const extra=(document.getElementById('extra-ingredients')?.value||'').trim();
-  const hasInput=recipeImages.length>0||ingredients.length>0||extra.length>0||getActiveIngredients().length>0;
-  const hasManual=ingredients.length>0||extra.length>0;
-  document.getElementById('gen-btn').disabled=!hasInput;
-  document.getElementById('bento-btn').disabled=!hasInput;
-  const ib=document.getElementById('input-only-btn');
+  const extra    = (document.getElementById('extra-ingredients')?.value||'').trim();
+  const hasInput = recipeImages.length>0||ingredients.length>0||extra.length>0||getActiveIngredients().length>0;
+  const hasManual= ingredients.length>0||extra.length>0;
+  document.getElementById('gen-btn').disabled   = !hasInput;
+  document.getElementById('bento-btn').disabled = !hasInput;
+  const ib = document.getElementById('input-only-btn');
   if(ib){ib.style.opacity=hasManual?'1':'0.4';ib.style.pointerEvents=hasManual?'auto':'none';}
 }
 
@@ -784,22 +935,40 @@ function updateFridgeOnlyBtn(enabled){
 }
 
 function useThisRecipe(recipeIndex){
-  // まずこのレシピだけを表示
   renderSingleRecipe(recipeIndex);
 
-  // 冷蔵庫の食材と照合して減算
-  const recipe=currentRecipes[recipeIndex];
-  const active=getActiveIngredients();
-  if(!active.length)return;
-  const matMatch=recipe.match(/###\s*材料[\s\S]*?(?=###|$)/);
-  const searchIn=matMatch?matMatch[0]:recipe;
-  const toUse=active.filter(item=>searchIn.includes(item.name));
-  if(!toUse.length)return;
-  const nameList=toUse.map(i=>`・${i.name}（残り${i.daysLeft}日）`).join('\n');
-  if(!confirm(`以下の食材を冷蔵庫から使用済みにしますか？\n\n${nameList}`))return;
-  toUse.forEach(item=>{ if(item.qty_whole>0)useWhole(item.rk,item.name); else if(item.qty_cut>0)useCut(item.rk,item.name); });
-  refreshStockList(); updateFridgeIndicator();
-  showToast(`✅ ${toUse.length}種の食材を使用済みにしました`);
+  const recipe     = currentRecipes[recipeIndex];
+  const active     = getActiveIngredients();
+  const fridgeNames= active.map(i => i.name);
+
+  // 材料セクションを抽出
+  const matMatch = recipe.match(/###\s*材料[\s\S]*?(?=###|$)/);
+  const searchIn = matMatch ? matMatch[0] : recipe;
+
+  // ── 冷蔵庫の食材を照合して使用済みにする ──
+  const toUse = active.filter(item => searchIn.includes(item.name));
+  if (toUse.length) {
+    const nameList = toUse.map(i => `・${i.name}（残り${i.daysLeft}日）`).join('\n');
+    if (confirm(`以下の食材を冷蔵庫から使用済みにしますか？\n\n${nameList}`)) {
+      toUse.forEach(item => { if(item.qty_whole>0)useWhole(item.rk,item.name); else if(item.qty_cut>0)useCut(item.rk,item.name); });
+      refreshStockList(); updateFridgeIndicator();
+      showToast(`✅ ${toUse.length}種の食材を使用済みにしました`);
+    }
+  }
+
+  // ── 不足食材を買い物リストへ自動追加 ──
+  const ingNames = [];
+  searchIn.split('\n').forEach(line => {
+    const m = line.match(/^[-・*]\s*([^\d\n:：（\(]{1,20})/);
+    if (!m) return;
+    const name = m[1].trim();
+    if (!name || BASIC_SEASONINGS.test(name)) return;
+    ingNames.push(name);
+  });
+  const missing = ingNames.filter(n => !fridgeNames.some(fn => n.includes(fn) || fn.includes(n)));
+  if (missing.length) {
+    addToShoppingListBatch(missing);
+  }
 }
 
 /* ═══ URGENCY MARKERS ═══ */
@@ -842,14 +1011,14 @@ function addShoppingMarkers(html){
     (match, h3tag, sectionContent) => {
       const processed = sectionContent.replace(/<ul>([\s\S]*?)<\/ul>/g, (ulMatch, ulContent) => {
         const markedItems = ulContent.replace(/<li>([\s\S]*?)<\/li>/g, (liMatch, content) => {
-          // タグを除いたテキストで判定
           const plainText = content.replace(/<[^>]+>/g, '');
-          // 基本調味料は除外
           if (BASIC_SEASONINGS.test(plainText)) return liMatch;
-          // 冷蔵庫に在庫あり → スキップ
           const inFridge = fridgeNames.some(name => plainText.includes(name));
           if (inFridge) return liMatch;
-          const badge = `<span style="display:inline-flex;align-items:center;gap:2px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;white-space:nowrap;">🛒 買い足し</span>`;
+          // コロン前の部分を食材名として抽出
+          const ingName = plainText.split(/[:：]/)[0].trim();
+          const escapedName = ingName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+          const badge = `<span onclick="addToShoppingList('${escapedName}')" style="display:inline-flex;align-items:center;gap:2px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;white-space:nowrap;cursor:pointer;" title="タップして買い物リストに追加">🛒 買い足し</span>`;
           return `<li>${content}${badge}</li>`;
         });
         return `<ul>${markedItems}</ul>`;
@@ -909,14 +1078,16 @@ async function generateFromInput(){
   document.getElementById('recipe-error').style.display='none';
   document.getElementById('gen-btn').disabled=true; document.getElementById('bento-btn').disabled=true;
 
+  const allergy=(document.getElementById('allergy-input')?.value||'').trim();
   const ingList=ingredients.map(i=>`- ${i}`).join('\n');
   const extraLine=extra?`\nリクエスト:\n${extra}\n`:'';
+  const allergyLine=allergy?`\n除外食材・アレルギー（絶対に使わないこと）: ${allergy}\n`:'';
   const stepNote='各ステップには「具体的な分量」「調理器具」「火加減」「加熱時間」を明記してください。';
   const prompt=`以下の食材だけを使って、${servings}人分の料理を3品提案してください。
 リスト外の食材は使わないこと（塩・砂糖・油・醤油・みりん・酒などの基本調味料は使用可）。
 
 使える食材:
-${ingList}${extraLine}
+${ingList}${extraLine}${allergyLine}
 
 各レシピは以下の形式で出力:
 ---
@@ -1024,17 +1195,19 @@ async function generate(mode){
   document.getElementById('recipe-error').style.display='none';
   document.getElementById('gen-btn').disabled=true; document.getElementById('bento-btn').disabled=true;
   const extra=(document.getElementById('extra-ingredients').value||'').trim();
+  const allergy=(document.getElementById('allergy-input')?.value||'').trim();
   const ingLine=ingredients.length>0?`\n確認済みの食材:\n${ingredients.map(i=>`- ${i}`).join('\n')}\n`:'';
   const extraLine=extra?`\nリクエスト:\n${extra}\n`:'';
+  const allergyLine=allergy?`\n除外食材・アレルギー（絶対に使わないこと）: ${allergy}\n`:'';
   const fridgeSection=buildFridgePromptSection();
   const stepNote='各ステップには「具体的な分量」「調理器具」「火加減」「加熱時間」を明記してください。';
   let prompt;
   if(mode==='bento'){
     const src=recipeImages.length>0?`添付した画像（${recipeImages.length}枚）の食材も参考にしながら、`:'';
-    prompt=`${src}${ingLine}${extraLine}${fridgeSection}\nお弁当のおかずを3品提案してください。冷めても美味しく、朝20分以内で作れる料理。${servings}人分。\n各レシピは以下の形式で出力:\n---\n## 【おかず名】\n**調理時間**: XX分\n### 材料（${servings}人分）\n- 食材名: 分量\n### 作り方\n${stepNote}\n1. Step\n### お弁当のコツ\n- ポイント\n---\n日本語で。`;
+    prompt=`${src}${ingLine}${extraLine}${allergyLine}${fridgeSection}\nお弁当のおかずを3品提案してください。冷めても美味しく、朝20分以内で作れる料理。${servings}人分。\n各レシピは以下の形式で出力:\n---\n## 【おかず名】\n**調理時間**: XX分\n### 材料（${servings}人分）\n- 食材名: 分量\n### 作り方\n${stepNote}\n1. Step\n### お弁当のコツ\n- ポイント\n---\n日本語で。`;
   } else {
     const src=recipeImages.length>0?`添付した画像（${recipeImages.length}枚）の食材も参考にしながら、`:'';
-    prompt=`${src}${ingLine}${extraLine}${fridgeSection}\n作りやすい料理を3品提案してください。${servings}人分。\n各レシピは以下の形式で出力:\n---\n## 【料理名】\n**調理時間**: XX分\n### 材料（${servings}人分）\n- 食材名: 分量\n### 作り方\n${stepNote}\n1. Step\n---\n日本語で。`;
+    prompt=`${src}${ingLine}${extraLine}${allergyLine}${fridgeSection}\n作りやすい料理を3品提案してください。${servings}人分。\n各レシピは以下の形式で出力:\n---\n## 【料理名】\n**調理時間**: XX分\n### 材料（${servings}人分）\n- 食材名: 分量\n### 作り方\n${stepNote}\n1. Step\n---\n日本語で。`;
   }
   try {
     let text;
@@ -1121,6 +1294,319 @@ function renderHistory(){
 function toggleHistoryItem(bodyId,arrId){ const body=document.getElementById(bodyId); const arr=document.getElementById(arrId); const open=body.style.display==='none'; body.style.display=open?'':'none'; if(arr)arr.textContent=open?'▲':'▼'; }
 function deleteHistoryItem(id){ if(!confirm('このレシピを削除しますか？'))return; LS.set('recipe_history',LS.get('recipe_history',[]).filter(h=>h.id!==id)); updateBadge(); renderHistory(); }
 
+/* ═══ DISH NAME SEARCH ═══ */
+function updateDishNameBtn() {
+  const val = (document.getElementById('extra-ingredients')?.value || '').trim();
+  const proposeBtn = document.getElementById('dish-propose-btn');
+  if (!proposeBtn) return;
+  proposeBtn.style.opacity = val ? '1' : '0.35';
+  proposeBtn.style.pointerEvents = val ? 'auto' : 'none';
+}
+
+async function generateByName() {
+  const query = (document.getElementById('extra-ingredients')?.value || '').trim();
+  if (!query) { showToast('❌ 料理名またはリクエストを入力してください'); return; }
+  const apiKey = LS.get('api_key', '');
+  if (!apiKey) { switchPanel('settings'); return; }
+
+  currentMode = 'recipe';
+  document.getElementById('recipe-loading').style.display = 'block';
+  document.getElementById('recipe-box').style.display = 'none';
+  document.getElementById('recipe-error').style.display = 'none';
+  ['gen-btn','bento-btn'].forEach(id => { const b=document.getElementById(id); if(b)b.disabled=true; });
+
+  const allergy = (document.getElementById('allergy-input')?.value || '').trim();
+  const stepNote = '各ステップには「具体的な分量」「調理器具」「火加減」「加熱時間」を明記してください。';
+  const prompt = `以下のリクエストに基づいて、${servings}人分のレシピを3品提案してください。
+リクエスト: ${query}
+${allergy ? `除外食材・アレルギー（絶対に使わないこと）: ${allergy}` : ''}
+
+【出力ルール・必須】
+- リクエストに料理名（例: 唐揚げ・パスタ等）が含まれる場合:
+  1品目 = その料理の基本・定番レシピ（アレンジなし）
+  2〜3品目 = アレンジ版（食材・調味料・調理法を変えたバリエーション）
+- リクエストのみ（料理名なし）の場合: リクエストに沿った料理を3品提案
+- ※冷蔵庫の在庫は考慮しない。一般的な食材でレシピを構成すること。
+
+各レシピは以下の形式で出力:
+---
+## 【料理名】
+**調理時間**: XX分
+### 材料（${servings}人分）
+- 食材名: 分量
+### 作り方
+${stepNote}
+1. Step
+---
+日本語で。`;
+
+  try {
+    let text;
+    const provider = LS.get('provider', 'gemini');
+    if (provider === 'gemini') {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})});
+      if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`); }
+      const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
+    } else {
+      const res = await fetch('https://api.openai.com/v1/chat/completions',
+        {method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+          body:JSON.stringify({model:'gpt-4o',messages:[{role:'user',content:prompt}],max_tokens:3000})});
+      if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(`OpenAI APIエラー(${res.status}): ${e?.error?.message||''}`); }
+      const d=await res.json(); text=d.choices?.[0]?.message?.content;
+    }
+    if (!text) throw new Error('AIからの返答が空でした');
+    showRecipes(text);
+  } catch(e) {
+    document.getElementById('recipe-error').textContent = e.message || '不明なエラー';
+    document.getElementById('recipe-error').style.display = 'block';
+  } finally {
+    document.getElementById('recipe-loading').style.display = 'none';
+    updateRecipeGenBtn();
+  }
+}
+
+/* ═══ SHOPPING LIST ═══ */
+const SHOP_KEY    = 'shopping_list_v1';
+const SHOP_30MIN  = 30 * 60 * 1000;
+function loadShopList()     { try { return JSON.parse(localStorage.getItem(SHOP_KEY)||'[]'); } catch { return []; } }
+function saveShopList(list) { localStorage.setItem(SHOP_KEY, JSON.stringify(list)); }
+
+/* ── 漢字→ひらがな変換辞書（食材） ── */
+const KANJI_TO_KANA = {
+  // 野菜
+  '白菜':'はくさい','人参':'にんじん','大根':'だいこん','牛蒡':'ごぼう',
+  '玉葱':'たまねぎ','玉ねぎ':'たまねぎ','葱':'ねぎ','長葱':'ながねぎ','長ネギ':'ながねぎ',
+  '生姜':'しょうが','大蒜':'にんにく','茄子':'なす','胡瓜':'きゅうり',
+  '南瓜':'かぼちゃ','蓮根':'れんこん','里芋':'さといも',
+  '薩摩芋':'さつまいも','馬鈴薯':'じゃがいも','薯':'いも',
+  '小松菜':'こまつな','水菜':'みずな','春菊':'しゅんぎく',
+  '青梗菜':'ちんげんさい','豆苗':'とうみょう','枝豆':'えだまめ',
+  '玉蜀黍':'とうもろこし','蕪':'かぶ','山芋':'やまいも','長芋':'ながいも',
+  '菠薐草':'ほうれんそう','法蓮草':'ほうれんそう',
+  '西洋南瓜':'かぼちゃ','玉蜀黍':'とうもろこし',
+  // 肉類
+  '鶏肉':'とりにく','鶏もも肉':'とりもも','鶏胸肉':'とりむね',
+  '豚肉':'ぶたにく','牛肉':'ぎゅうにく',
+  '挽肉':'ひきにく','挽き肉':'ひきにく','合挽き':'あいびき','合挽':'あいびき',
+  '豚バラ':'ぶたばら','牛バラ':'ぎゅうばら',
+  // 魚介
+  '鮭':'さけ','鯖':'さば','鱈':'たら','鯛':'たい','鰤':'ぶり','鮪':'まぐろ',
+  '海老':'えび','烏賊':'いか','蛸':'たこ','帆立':'ほたて',
+  '浅蜊':'あさり','蛤':'はまぐり','牡蠣':'かき',
+  // その他
+  '卵':'たまご','玉子':'たまご','鶏卵':'たまご',
+  '豆腐':'とうふ','厚揚げ':'あつあげ','油揚げ':'あぶらあげ','薄揚げ':'あぶらあげ',
+  '牛乳':'ぎゅうにゅう','豆乳':'とうにゅう','納豆':'なっとう',
+  '林檎':'りんご','蜜柑':'みかん','苺':'いちご','葡萄':'ぶどう',
+  '桃':'もも','梨':'なし','柚子':'ゆず','檸檬':'れもん',
+  '榎茸':'えのきたけ','椎茸':'しいたけ','舞茸':'まいたけ','松茸':'まつたけ',
+};
+
+/* ── 表記ゆれ正規化 ── */
+function normalizeIng(str) {
+  let s = str;
+  // 漢字→ひらがな（辞書順に長い語を優先するためソート済み）
+  for (const [k, v] of Object.entries(KANJI_TO_KANA)) s = s.split(k).join(v);
+  // カタカナ→ひらがな
+  s = s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  return s.toLowerCase().replace(/\s+/g, '').replace(/[・\-_]/g, '');
+}
+
+/* ── 同一食材判定 ── */
+function isSameIng(a, b) {
+  const na = normalizeIng(a), nb = normalizeIng(b);
+  // 正規化後に完全一致
+  if (na === nb) return true;
+  // LIFESPAN_DB の同エントリにマッチ（原文 OR 正規化後で両方試す）
+  const ea = LIFESPAN_DB.find(e => e.name.test(a) || e.name.test(na));
+  const eb = LIFESPAN_DB.find(e => e.name.test(b) || e.name.test(nb));
+  return !!(ea && eb && ea === eb);
+}
+
+/* 期限切れ購入済みアイテムを削除（30分経過） */
+function cleanupExpiredShopItems() {
+  const now  = Date.now();
+  const list = loadShopList();
+  const kept = list.filter(i => !(i.checked && i.checkedAt && (now - i.checkedAt) >= SHOP_30MIN));
+  if (kept.length !== list.length) { saveShopList(kept); updateShopBadge(); return true; }
+  return false;
+}
+
+/* ページ再読み込み後のタイマー復元 */
+function rescheduleShopTimers() {
+  const now = Date.now();
+  loadShopList().forEach(item => {
+    if (!item.checked || !item.checkedAt) return;
+    const elapsed = now - item.checkedAt;
+    if (elapsed >= SHOP_30MIN) { deleteShopItem(item.id); return; }
+    _shopRemoveTimers.set(item.id, setTimeout(() => {
+      _shopRemoveTimers.delete(item.id);
+      deleteShopItem(item.id);
+    }, SHOP_30MIN - elapsed));
+  });
+}
+
+function addToShoppingList(name) {
+  const n = name.trim(); if (!n) return;
+  const list = loadShopList();
+
+  // 買い物リスト内の重複チェック（表記ゆれ対応）
+  const existing = list.find(i => !i.checked && isSameIng(i.name, n));
+  if (existing) {
+    existing.dupCount = (existing.dupCount || 0) + 1;
+    saveShopList(list);
+    showToast(`⚠️「${n}」はすでにリストにあります（重複×${existing.dupCount}）`);
+    updateShopBadge();
+    if (document.getElementById('panel-shopping').classList.contains('active')) renderShoppingList();
+    return;
+  }
+
+  // 冷蔵庫在庫チェック（表記ゆれ対応）
+  const inFridge = getActiveIngredients().some(item => isSameIng(item.name, n));
+
+  list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), name: n, checked: false, dupCount: 0, fridgeWarn: inFridge });
+  saveShopList(list);
+  showToast(inFridge ? `⚠️「${n}」は冷蔵庫に在庫があります！` : `🛒「${n}」を買い物リストに追加`);
+  updateShopBadge();
+  if (document.getElementById('panel-shopping').classList.contains('active')) renderShoppingList();
+}
+
+function addToShoppingListBatch(names) {
+  if (!names.length) return;
+  const list = loadShopList();
+  let added = 0, duped = 0;
+  names.forEach((raw, offset) => {
+    const n = raw.trim(); if (!n) return;
+    const existing = list.find(i => i.name === n && !i.checked);
+    if (existing) { existing.dupCount = (existing.dupCount||0)+1; duped++; return; }
+    list.push({ id: Date.now().toString(36) + offset + Math.random().toString(36).slice(2), name: n, checked: false, dupCount: 0 });
+    added++;
+  });
+  saveShopList(list);
+  updateShopBadge();
+  if (document.getElementById('panel-shopping').classList.contains('active')) renderShoppingList();
+  if (added > 0) showToast(`🛒 ${added}品を買い物リストに追加しました`);
+  else if (duped > 0) showToast(`⚠️ ${duped}品はすでにリストにあります`);
+}
+
+function addToShoppingListManual() {
+  const inp = document.getElementById('shop-input');
+  addToShoppingList(inp.value); inp.value = ''; inp.focus();
+}
+
+const _shopRemoveTimers = new Map();
+
+function toggleShopItem(id) {
+  const list = loadShopList();
+  const item = list.find(i => i.id === id);
+  if (!item) return;
+  item.checked = !item.checked;
+  if (item.checked) {
+    item.dupCount = 0;
+    item.checkedAt = Date.now();
+    if (_shopRemoveTimers.has(id)) clearTimeout(_shopRemoveTimers.get(id));
+    // 30分後に自動削除
+    _shopRemoveTimers.set(id, setTimeout(() => {
+      _shopRemoveTimers.delete(id);
+      deleteShopItem(id);
+    }, SHOP_30MIN));
+  } else {
+    item.checkedAt = null;
+    if (_shopRemoveTimers.has(id)) { clearTimeout(_shopRemoveTimers.get(id)); _shopRemoveTimers.delete(id); }
+  }
+  saveShopList(list); renderShoppingList(); updateShopBadge();
+}
+
+function deleteShopItem(id) {
+  saveShopList(loadShopList().filter(i => i.id !== id));
+  renderShoppingList(); updateShopBadge();
+}
+
+function clearCheckedItems() {
+  saveShopList(loadShopList().filter(i => !i.checked));
+  renderShoppingList(); updateShopBadge();
+}
+
+function clearAllShoppingItems() {
+  if (!confirm('買い物リストをすべて削除しますか？')) return;
+  saveShopList([]); renderShoppingList(); updateShopBadge();
+}
+
+function updateShopBadge() {
+  const unchecked = loadShopList().filter(i => !i.checked).length;
+  const navBadge = document.getElementById('shop-nav-badge');
+  if (navBadge) { navBadge.textContent = unchecked; navBadge.style.display = unchecked > 0 ? '' : 'none'; }
+  const hdrBadge = document.getElementById('shop-count-badge');
+  if (hdrBadge) { hdrBadge.textContent = `${unchecked}品`; hdrBadge.style.display = unchecked > 0 ? '' : 'none'; }
+}
+
+function renderShoppingList() {
+  cleanupExpiredShopItems();
+  const list = loadShopList();
+  const el = document.getElementById('shopping-list');
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;"><div style="font-size:48px;">🛒</div><p style="font-size:14px;margin-top:8px;">買い物リストは空です<br><br>レシピ画面の「🛒 買い足し」バッジをタップするか<br>上の入力欄から追加してください</p></div>';
+    return;
+  }
+  const unchecked = list.filter(i => !i.checked);
+  const checked   = list.filter(i =>  i.checked);
+  const now = Date.now();
+  let html = '';
+  if (unchecked.length) {
+    html += `<div class="section-hd">未購入 (${unchecked.length}品)</div>`;
+    html += unchecked.map(item => {
+      const dupHtml    = item.dupCount > 0
+        ? `<span class="dup-badge">！×${item.dupCount} 重複</span>` : '';
+      const fridgeHtml = item.fridgeWarn
+        ? `<span style="display:inline-flex;align-items:center;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:5px;vertical-align:middle;">🥦 冷蔵庫にあり</span>` : '';
+      return `<div class="shop-item">
+        <input type="checkbox" class="shop-cb" onchange="toggleShopItem('${item.id}')">
+        <span class="shop-name" style="flex:1;font-weight:600;font-size:14px;">${escHtml(item.name)}${fridgeHtml}${dupHtml}</span>
+        <button onclick="deleteShopItem('${item.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#cbd5e1;padding:4px;">✕</button>
+      </div>`;
+    }).join('');
+  }
+  if (checked.length) {
+    html += `<div class="section-hd" style="margin-top:14px;">✅ 購入済み — 30分後に自動削除 (${checked.length}品)</div>`;
+    html += checked.map(item => {
+      const remaining = item.checkedAt
+        ? Math.max(0, Math.ceil((SHOP_30MIN - (now - item.checkedAt)) / 60000)) : 30;
+      return `<div class="shop-item checked">
+        <input type="checkbox" class="shop-cb" checked onchange="toggleShopItem('${item.id}')">
+        <span class="shop-name" style="flex:1;font-size:14px;">${escHtml(item.name)}<span style="font-size:10px;color:#cbd5e1;margin-left:6px;">あと${remaining}分</span></span>
+        <button onclick="deleteShopItem('${item.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;color:#cbd5e1;padding:4px;">✕</button>
+      </div>`;
+    }).join('');
+  }
+  el.innerHTML = html;
+}
+
+/* ═══ SETTINGS: PROVIDER + API KEY ═══ */
+function onSettingsProviderChange() {
+  const provider = document.getElementById('settings-provider').value;
+  const placeholder = provider === 'gemini' ? 'AIzaSy...' : 'sk-...';
+  document.getElementById('api-key-input').placeholder = placeholder;
+}
+
+function saveApiKey() {
+  const key      = document.getElementById('api-key-input').value.trim();
+  const provider = document.getElementById('settings-provider').value;
+  if (!key) { showToast('❌ APIキーを入力してください'); return; }
+  LS.set('provider', provider);
+  LS.set('api_key', key);
+  if (provider === 'gemini') saveFridgeApiKey(key);
+  // レシピ設定モーダルの値も同期
+  const selProv = document.getElementById('sel-provider');
+  const inpKey  = document.getElementById('inp-key');
+  if (selProv) selProv.value = provider;
+  if (inpKey)  inpKey.value  = key;
+  const ok = document.getElementById('settings-save-ok');
+  if (ok) { ok.style.display = 'block'; setTimeout(() => { ok.style.display = 'none'; }, 2500); }
+  showToast('✅ 設定を保存しました');
+  refreshStockList();
+}
+
 /* ═══ INIT ═══ */
 (function init(){
   // v1/v2→v3 migration
@@ -1140,7 +1626,7 @@ function deleteHistoryItem(id){ if(!confirm('このレシピを削除します�
   });
   const t=new Date();
   document.getElementById('dateInput').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
-  refreshStockList(); updateBadge(); updateRecipeGenBtn();
+  refreshStockList(); updateBadge(); updateRecipeGenBtn(); updateShopBadge(); rescheduleShopTimers();
   document.getElementById('sel-provider').value=LS.get('provider','gemini');
   document.getElementById('inp-key').value=LS.get('api_key','');
   updateFridgeOnlyBtn(getActiveIngredients().length>0);
