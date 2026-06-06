@@ -132,7 +132,7 @@
       <!-- 手入力モード -->
       <div id="manualMode" style="display:none;">
         <div class="fg">
-          <label>食材名</label>
+          <label>食材を入力</label>
           <input type="text" id="manualNameInput" placeholder="例: 玉ねぎ" oninput="onManualNameInput()" onkeydown="if(event.key==='Enter')onAddManual()">
           <div class="infer-hint" id="manualInferHint"></div>
         </div>
@@ -146,14 +146,14 @@
           <div class="fg"><label>日持ち（日）</label><input type="number" id="manualDaysInput" placeholder="自動" min="1" max="365"></div>
           <div class="fg"><label>個数</label><input type="number" id="manualQtyInput" placeholder="1" min="1" max="99" value="1"></div>
         </div>
-        <button class="btn btn-outline" style="margin-top:8px;" onclick="onAddManual()">＋ リストに追加</button>
+        <button class="btn btn-outline" style="margin-top:8px;" onclick="onAddManual()">＋ 食材を追加入力</button>
         <div id="manualPendingList"></div>
-        <button class="btn btn-primary" id="manualSaveBtn" onclick="onSaveManual()" disabled>✅ まとめて登録</button>
+        <button class="btn btn-primary" id="manualSaveBtn" onclick="onSaveManual()" disabled>✅ 登録</button>
       </div>
       <!-- 共通: 購入日・店舗 -->
       <div class="form-row" style="margin-top:12px;">
         <div class="fg"><label>📅 購入日</label><input type="date" id="dateInput" onchange="updateFridgeBtn()"></div>
-        <div class="fg"><label>🏪 店舗名</label><input type="text" id="storeInput" placeholder="例: イオン" maxlength="20" oninput="updateFridgeBtn()"></div>
+        <div class="fg"><label>🏪 店舗名<span style="font-size:10px;color:#94a3b8;margin-left:4px;">（任意）</span></label><input type="text" id="storeInput" placeholder="例: イオン（省略可）" maxlength="20" oninput="updateFridgeBtn()"></div>
       </div>
     </div>
     <div id="stockList"></div>
@@ -257,16 +257,29 @@
       </div>
 
       <!-- ⑥ 生成ボタン群 -->
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <button id="gen-btn" onclick="generate('recipe')" disabled
-          style="flex:1;padding:14px;background:#f97316;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">🍳 レシピを生成</button>
-        <button id="bento-btn" onclick="generate('bento')" disabled
-          style="flex:1;padding:14px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">🍱 弁当おかず</button>
+      <!-- 食材モード選択 -->
+      <div style="margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:5px;">使う食材</div>
+        <div style="display:flex;gap:6px;">
+          <button id="mode-fridge-btn" onclick="setIngMode('fridge')"
+            style="flex:1;padding:10px;background:#7c3aed;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">🥦 冷蔵庫中心</button>
+          <button id="mode-input-btn" onclick="setIngMode('input')"
+            style="flex:1;padding:10px;background:#e5e7eb;color:#6b7280;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">📝 入力した食材のみ</button>
+        </div>
       </div>
-      <button id="input-only-btn" onclick="generateFromInput()"
-        style="width:100%;padding:11px;background:#d97706;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;opacity:0.4;pointer-events:none;">
-        📝 入力した食材のみで作る
-      </button>
+      <!-- 出力タイプ選択 -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:5px;">作るもの</div>
+        <div style="display:flex;gap:6px;">
+          <button id="type-recipe-btn" onclick="setRecipeType('recipe')"
+            style="flex:1;padding:10px;background:#f97316;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">🍳 レシピを生成</button>
+          <button id="type-bento-btn" onclick="setRecipeType('bento')"
+            style="flex:1;padding:10px;background:#e5e7eb;color:#6b7280;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;">🍱 弁当おかず</button>
+        </div>
+      </div>
+      <!-- 実行ボタン -->
+      <button id="gen-btn" onclick="handleGenerate()" disabled
+        style="width:100%;padding:14px;background:#f97316;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;transition:background .2s;">▶ 生成する</button>
       <div id="recipe-loading" style="display:none;text-align:center;padding:32px;">
         <div class="recipe-spinner" style="width:40px;height:40px;border-width:4px;"></div>
         <p style="margin-top:12px;color:#64748b;font-size:13px;">AIがレシピを考えています…</p>
@@ -346,6 +359,9 @@
             <a href="https://aistudio.google.com/" target="_blank" class="text-blue-600 hover:underline font-semibold inline-flex items-center">
               Google AI Studio <i class="fa-solid fa-arrow-up-right-from-square ml-1 text-[10px]"></i>
             </a> にアクセスし、Googleアカウントでログインします。
+          </li>
+          <li>
+            画面<span class="font-bold text-slate-900">左上の「≡」</span>をクリックして<span class="font-bold text-slate-900">「Dashboard」</span>を選択し、<span class="font-bold text-slate-900">「APIキー」</span>をクリックします。
           </li>
           <li>
             画面右上にある<span class="font-bold text-slate-900">「APIキーを作成 (Create API key)」</span>をクリックします。
@@ -652,7 +668,7 @@ function renderIngCard(item) {
     <div style="font-size:28px;flex-shrink:0;">${emoji}</div>
     <div style="flex:1;min-width:0;">
       <div style="font-weight:700;font-size:15px;">${escHtml(item.name)}</div>
-      <div style="font-size:12px;color:#64748b;margin-top:2px;">${escHtml(item.storeName)} · ${fmtDate(item.purchase)} · ${CAT_LABEL[item.category]||item.category}</div>
+      <div style="font-size:12px;color:#64748b;margin-top:2px;">${item.storeName?escHtml(item.storeName)+' · ':''}${fmtDate(item.purchase)} · ${CAT_LABEL[item.category]||item.category}</div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
         <span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:${isAlert?'#fee2e2':'#dcfce7'};color:${isAlert?'#991b1b':'#166534'};">${isAlert?'🚨 期限注意':'✅ 在庫あり'}</span>
         <span style="font-size:12px;color:#64748b;">${daysTxt}（${fmtDate(item.expiry)}まで）</span>
@@ -693,9 +709,11 @@ function onFridgeFileSelect(e) {
 }
 function updateFridgeBtn() {
   const dateOk  = !!document.getElementById('dateInput').value;
-  const storeOk = !!document.getElementById('storeInput').value.trim();
-  document.getElementById('analyzeBtn').disabled = !(selectedFile&&dateOk&&storeOk);
-  const sb=document.getElementById('manualSaveBtn'); if(sb)sb.disabled=manualPendingList.length===0||!dateOk||!storeOk;
+  document.getElementById('analyzeBtn').disabled = !(selectedFile&&dateOk);
+  const nameVal=(document.getElementById('manualNameInput')?.value||'').trim();
+  const daysVal=parseInt(document.getElementById('manualDaysInput')?.value||'0');
+  const nameReady=nameVal&&daysVal>0;
+  const sb=document.getElementById('manualSaveBtn'); if(sb)sb.disabled=manualPendingList.length===0&&!nameReady;
 }
 function onToggleStorage(rk,name,newSt){ setStorageType(rk,name,newSt); showToast(`${newSt==='freezer'?'🧊 冷凍':'❄️ 冷蔵'}に変更`); refreshStockList(); }
 function onUseWhole(rk,name){ useWhole(rk,name); showToast(`🔵 ${name}を1個使用`); refreshStockList(); updateFridgeIndicator(); }
@@ -727,6 +745,7 @@ function onManualNameInput() {
   const name=document.getElementById('manualNameInput').value.trim(); const inf=inferFromName(name); const hint=document.getElementById('manualInferHint');
   if(inf&&name){ document.getElementById('manualCategory').value=inf.category; document.getElementById('manualDaysInput').value=inf.fridge; hint.innerHTML=`💡 推定: ${CAT_LABEL[inf.category]}、冷蔵 <b>${inf.fridge}日</b>`; hint.style.display='block'; }
   else{ document.getElementById('manualDaysInput').value=''; hint.style.display='none'; }
+  updateFridgeBtn();
 }
 function onAddManual() {
   const name=document.getElementById('manualNameInput').value.trim(); if(!name){showToast('❌ 食材名を入力してください');return;}
@@ -745,9 +764,21 @@ function renderManualPending() {
 }
 function removeManualItem(idx){ manualPendingList.splice(idx,1); renderManualPending(); }
 function onSaveManual() {
+  const name=document.getElementById('manualNameInput').value.trim();
+  if(name){
+    const cat=document.getElementById('manualCategory').value; const inf=inferFromName(name);
+    const days=parseInt(document.getElementById('manualDaysInput').value)||(inf?inf.fridge:null);
+    if(days){
+      const qty=Math.max(1,parseInt(document.getElementById('manualQtyInput').value)||1);
+      manualPendingList.push({name,category:cat,baseDays:days,qty});
+      document.getElementById('manualNameInput').value=''; document.getElementById('manualDaysInput').value='';
+      document.getElementById('manualQtyInput').value='1'; document.getElementById('manualInferHint').style.display='none';
+    }
+  }
   if(!manualPendingList.length)return;
-  const dateRaw=document.getElementById('dateInput').value; const storeName=document.getElementById('storeInput').value.trim();
-  if(!dateRaw||!storeName){showToast('❌ 購入日と店舗名を入力してください');return;}
+  const today=new Date(); const pad=n=>String(n).padStart(2,'0');
+  const todayStr=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  const dateRaw=document.getElementById('dateInput').value||todayStr; const storeName=document.getElementById('storeInput').value.trim();
   const rk=`${dateRaw.replace(/-/g,'/')}_${storeName}`; const db=loadDB();
   if(!db[rk])db[rk]={image_thumbnail:null,ingredients:[]};
   for(const it of manualPendingList) db[rk].ingredients.push({name:it.name,category:it.category,base_lifespan:it.baseDays,storage_type:'fridge',qty_whole:it.qty,qty_cut:0,status:'available'});
@@ -823,6 +854,8 @@ let currentMode    = null;
 let savedIndices   = new Set();
 let servings       = 2;
 let recognizeTimer = null;
+let ingredientMode = 'fridge'; // 'fridge' | 'input'
+let recipeType     = 'recipe'; // 'recipe' | 'bento'
 
 // Recipe settings
 function openRecipeSettings()  { document.getElementById('sel-provider').value=LS.get('provider','gemini'); document.getElementById('inp-key').value=LS.get('api_key',''); document.getElementById('recipe-save-ok').style.display='none'; document.getElementById('recipeSettingsModal').classList.add('open'); }
@@ -857,10 +890,33 @@ function updateRecipeGenBtn(){
   const extra    = (document.getElementById('extra-ingredients')?.value||'').trim();
   const hasInput = recipeImages.length>0||ingredients.length>0||extra.length>0||getActiveIngredients().length>0;
   const hasManual= ingredients.length>0||extra.length>0;
-  document.getElementById('gen-btn').disabled   = !hasInput;
-  document.getElementById('bento-btn').disabled = !hasInput;
-  const ib = document.getElementById('input-only-btn');
-  if(ib){ib.style.opacity=hasManual?'1':'0.4';ib.style.pointerEvents=hasManual?'auto':'none';}
+  const canGen   = ingredientMode==='input' ? hasManual : hasInput;
+  const btn = document.getElementById('gen-btn');
+  if(btn) btn.disabled = !canGen;
+}
+
+function setIngMode(mode){
+  ingredientMode = mode;
+  const fb = document.getElementById('mode-fridge-btn');
+  const ib = document.getElementById('mode-input-btn');
+  if(fb){ fb.style.background=mode==='fridge'?'#7c3aed':'#e5e7eb'; fb.style.color=mode==='fridge'?'#fff':'#6b7280'; }
+  if(ib){ ib.style.background=mode==='input'?'#d97706':'#e5e7eb'; ib.style.color=mode==='input'?'#fff':'#6b7280'; }
+  updateRecipeGenBtn();
+}
+
+function setRecipeType(type){
+  recipeType = type;
+  const rb = document.getElementById('type-recipe-btn');
+  const bb = document.getElementById('type-bento-btn');
+  const gb = document.getElementById('gen-btn');
+  if(rb){ rb.style.background=type==='recipe'?'#f97316':'#e5e7eb'; rb.style.color=type==='recipe'?'#fff':'#6b7280'; }
+  if(bb){ bb.style.background=type==='bento'?'#22c55e':'#e5e7eb'; bb.style.color=type==='bento'?'#fff':'#6b7280'; }
+  if(gb){ gb.style.background=type==='bento'?'#22c55e':'#f97316'; }
+}
+
+function handleGenerate(){
+  if(ingredientMode==='input') generateFromInput(recipeType);
+  else generate(recipeType);
 }
 
 // Recipe images
@@ -1066,24 +1122,46 @@ function addGoogleImageLinks(html){
 }
 
 /* ═══ INPUT-ONLY GENERATE ═══ */
-async function generateFromInput(){
+async function generateFromInput(mode='recipe'){
   const apiKey=LS.get('api_key',''); const provider=LS.get('provider','gemini');
   if(!apiKey){openRecipeSettings();return;}
   const extra=(document.getElementById('extra-ingredients').value||'').trim();
   if(!ingredients.length&&!extra){showToast('❌ 食材リストに食材を追加してください');return;}
 
-  currentMode='recipe';
+  currentMode=mode;
   document.getElementById('recipe-loading').style.display='block';
   document.getElementById('recipe-box').style.display='none';
   document.getElementById('recipe-error').style.display='none';
-  document.getElementById('gen-btn').disabled=true; document.getElementById('bento-btn').disabled=true;
+  document.getElementById('gen-btn').disabled=true;
 
   const allergy=(document.getElementById('allergy-input')?.value||'').trim();
   const ingList=ingredients.map(i=>`- ${i}`).join('\n');
   const extraLine=extra?`\nリクエスト:\n${extra}\n`:'';
   const allergyLine=allergy?`\n除外食材・アレルギー（絶対に使わないこと）: ${allergy}\n`:'';
   const stepNote='各ステップには「具体的な分量」「調理器具」「火加減」「加熱時間」を明記してください。';
-  const prompt=`以下の食材だけを使って、${servings}人分の料理を3品提案してください。
+  let prompt;
+  if(mode==='bento'){
+    prompt=`以下の食材だけを使って、お弁当のおかずを3品提案してください。冷めても美味しく、朝20分以内で作れる料理。${servings}人分。
+リスト外の食材は使わないこと（塩・砂糖・油・醤油・みりん・酒などの基本調味料は使用可）。
+
+使える食材:
+${ingList}${extraLine}${allergyLine}
+
+各レシピは以下の形式で出力:
+---
+## 【おかず名】
+**調理時間**: XX分
+### 材料（${servings}人分）
+- 食材名: 分量
+### 作り方
+${stepNote}
+1. Step
+### お弁当のコツ
+- ポイント
+---
+日本語で。`;
+  } else {
+    prompt=`以下の食材だけを使って、${servings}人分の料理を3品提案してください。
 リスト外の食材は使わないこと（塩・砂糖・油・醤油・みりん・酒などの基本調味料は使用可）。
 
 使える食材:
@@ -1100,6 +1178,7 @@ ${stepNote}
 1. Step
 ---
 日本語で。`;
+  }
 
   try {
     let text;
@@ -1133,7 +1212,6 @@ async function generateFromFridge(){
   document.getElementById('recipe-box').style.display='none';
   document.getElementById('recipe-error').style.display='none';
   document.getElementById('gen-btn').disabled=true;
-  document.getElementById('bento-btn').disabled=true;
 
   const urgent=active.filter(i=>i.daysLeft<5);
   const normal=active.filter(i=>i.daysLeft>=5);
@@ -1193,7 +1271,7 @@ async function generate(mode){
   document.getElementById('recipe-loading').style.display='block';
   document.getElementById('recipe-box').style.display='none';
   document.getElementById('recipe-error').style.display='none';
-  document.getElementById('gen-btn').disabled=true; document.getElementById('bento-btn').disabled=true;
+  document.getElementById('gen-btn').disabled=true;
   const extra=(document.getElementById('extra-ingredients').value||'').trim();
   const allergy=(document.getElementById('allergy-input')?.value||'').trim();
   const ingLine=ingredients.length>0?`\n確認済みの食材:\n${ingredients.map(i=>`- ${i}`).join('\n')}\n`:'';
@@ -1313,7 +1391,7 @@ async function generateByName() {
   document.getElementById('recipe-loading').style.display = 'block';
   document.getElementById('recipe-box').style.display = 'none';
   document.getElementById('recipe-error').style.display = 'none';
-  ['gen-btn','bento-btn'].forEach(id => { const b=document.getElementById(id); if(b)b.disabled=true; });
+  const gb=document.getElementById('gen-btn'); if(gb)gb.disabled=true;
 
   const allergy = (document.getElementById('allergy-input')?.value || '').trim();
   const stepNote = '各ステップには「具体的な分量」「調理器具」「火加減」「加熱時間」を明記してください。';
