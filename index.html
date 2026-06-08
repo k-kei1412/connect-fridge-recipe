@@ -282,7 +282,7 @@
         style="width:100%;padding:14px;background:#f97316;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;transition:background .2s;">▶ 生成する</button>
       <div id="recipe-loading" style="display:none;text-align:center;padding:32px;">
         <div class="recipe-spinner" style="width:40px;height:40px;border-width:4px;"></div>
-        <p style="margin-top:12px;color:#64748b;font-size:13px;">AIがレシピを考えています…</p>
+        <p id="recipe-loading-text" style="margin-top:12px;color:#64748b;font-size:13px;">AIがレシピを考えています…</p>
       </div>
       <div id="recipe-error" class="error-box" style="display:none;"></div>
       <div id="recipe-box" style="display:none;">
@@ -786,6 +786,17 @@ function onSaveManual() {
 }
 
 function fileToBase64(file){ return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);}); }
+async function fetchWithRetry(url, options, setStatus) {
+  const MAX = 3; let delay = 1000;
+  for (let i = 0; i <= MAX; i++) {
+    const res = await fetch(url, options);
+    if (res.status !== 503 && res.status !== 429) return res;
+    if (i >= MAX) return res;
+    if (setStatus) setStatus(`サーバー混雑中… リトライ ${i+1}/${MAX}回目（${delay/1000}秒後）`);
+    await new Promise(r => setTimeout(r, delay));
+    delay *= 2;
+  }
+}
 async function onAnalyze() {
   const dateStr=document.getElementById('dateInput').value.replace(/-/g,'/'); const storeName=document.getElementById('storeInput').value.trim();
   try {
@@ -800,10 +811,11 @@ async function analyzePhoto(imageFile, dateStr, storeName) {
   const prompt=`この写真に写っているすべての食材を特定し、JSONで返してください。
 {"ingredients":[{"name":"食材名","category":"meat|fish|vegetable|fruit|other","base_lifespan":日数,"quantity":個数,"is_cut":false}]}
 食材名は日本語で。categoryは必ず5値のいずれか。`;
-  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+  const setFridgeStatus=msg=>document.getElementById('fridge-loading-text').textContent=msg;
+  const res=await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mimeType,data:base64Data}},{text:prompt}]}],generationConfig:{responseMimeType:'application/json'}})});
-  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`APIエラー(${res.status})`);}
+      body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mimeType,data:base64Data}},{text:prompt}]}],generationConfig:{responseMimeType:'application/json'}})},setFridgeStatus);
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(res.status===503?'サーバーが混雑中です。しばらく待ってから再試行してください。':e?.error?.message||`APIエラー(${res.status})`);}
   const json=await res.json(); const parsed=JSON.parse(json.candidates[0].content.parts[0].text);
   const rk=`${dateStr}_${storeName}`; const db=loadDB();
   if(!db[rk])db[rk]={image_thumbnail:null,ingredients:[]};
@@ -951,8 +963,8 @@ async function recognizeIngredients(){
     let text;
     if(provider==='gemini'){
       const parts=[{text:prompt}]; recipeImages.forEach(img=>parts.push({inline_data:{mime_type:img.mime,data:img.base64}}));
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.3,responseMimeType:'application/json'}})});
-      if(!res.ok)throw new Error(`Gemini APIエラー(${res.status})`); const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
+      const res=await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.3,responseMimeType:'application/json'}})});
+      if(!res.ok)throw new Error(res.status===503?'サーバーが混雑中です。しばらく待ってから再試行してください。':`Gemini APIエラー(${res.status})`); const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
     } else {
       const content=[{type:'text',text:prompt}]; recipeImages.forEach(img=>content.push({type:'image_url',image_url:{url:`data:${img.mime};base64,${img.base64}`}}));
       const res=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},body:JSON.stringify({model:'gpt-4o',messages:[{role:'user',content}],max_tokens:300,response_format:{type:'json_object'}})});
@@ -1002,7 +1014,12 @@ function useThisRecipe(recipeIndex){
   const searchIn = matMatch ? matMatch[0] : recipe;
 
   // ── 冷蔵庫の食材を照合して使用済みにする ──
-  const toUse = active.filter(item => searchIn.includes(item.name));
+  const recipeIngNames = [...searchIn.matchAll(/^[-・*]\s*([^\d\n:：（\(]{1,20})/gm)]
+    .map(m => m[1].trim()).filter(Boolean);
+  const toUse = active.filter(item =>
+    searchIn.includes(item.name) ||
+    recipeIngNames.some(rn => isSameIng(item.name, rn))
+  );
   if (toUse.length) {
     const nameList = toUse.map(i => `・${i.name}（残り${i.daysLeft}日）`).join('\n');
     if (confirm(`以下の食材を冷蔵庫から使用済みにしますか？\n\n${nameList}`)) {
@@ -1069,10 +1086,10 @@ function addShoppingMarkers(html){
         const markedItems = ulContent.replace(/<li>([\s\S]*?)<\/li>/g, (liMatch, content) => {
           const plainText = content.replace(/<[^>]+>/g, '');
           if (BASIC_SEASONINGS.test(plainText)) return liMatch;
-          const inFridge = fridgeNames.some(name => plainText.includes(name));
-          if (inFridge) return liMatch;
-          // コロン前の部分を食材名として抽出
+          // コロン前の部分を食材名として抽出（inFridge 判定にも使う）
           const ingName = plainText.split(/[:：]/)[0].trim();
+          const inFridge = fridgeNames.some(name => isSameIng(name, ingName));
+          if (inFridge) return liMatch;
           const escapedName = ingName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
           const badge = `<span onclick="addToShoppingList('${escapedName}')" style="display:inline-flex;align-items:center;gap:2px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle;white-space:nowrap;cursor:pointer;" title="タップして買い物リストに追加">🛒 買い足し</span>`;
           return `<li>${content}${badge}</li>`;
@@ -1183,9 +1200,10 @@ ${stepNote}
   try {
     let text;
     if(provider==='gemini'){
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})});
-      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`);}
+      const setStatus=msg=>{const el=document.getElementById('recipe-loading-text');if(el)el.textContent=msg;};
+      const res=await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})},setStatus);
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(res.status===503?'サーバーが混雑中です。しばらく待ってから再試行してください。':`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`);}
       const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
     } else {
       const res=await fetch('https://api.openai.com/v1/chat/completions',
@@ -1197,7 +1215,7 @@ ${stepNote}
     if(!text)throw new Error('AIからの返答が空でした');
     showRecipes(text);
   } catch(e){ document.getElementById('recipe-error').textContent=e.message||'不明なエラー'; document.getElementById('recipe-error').style.display='block'; }
-  finally{ document.getElementById('recipe-loading').style.display='none'; updateRecipeGenBtn(); }
+  finally{ const el=document.getElementById('recipe-loading-text');if(el)el.textContent='AIがレシピを考えています…'; document.getElementById('recipe-loading').style.display='none'; updateRecipeGenBtn(); }
 }
 
 /* ═══ FRIDGE-ONLY GENERATE ═══ */
@@ -1241,9 +1259,10 @@ ${stepNote}
   try {
     let text;
     if(provider==='gemini'){
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})});
-      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`);}
+      const setStatus=msg=>{const el=document.getElementById('recipe-loading-text');if(el)el.textContent=msg;};
+      const res=await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})},setStatus);
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(res.status===503?'サーバーが混雑中です。しばらく待ってから再試行してください。':`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`);}
       const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
     } else {
       const res=await fetch('https://api.openai.com/v1/chat/completions',
@@ -1258,6 +1277,7 @@ ${stepNote}
     document.getElementById('recipe-error').textContent=e.message||'不明なエラー';
     document.getElementById('recipe-error').style.display='block';
   } finally {
+    const el=document.getElementById('recipe-loading-text');if(el)el.textContent='AIがレシピを考えています…';
     document.getElementById('recipe-loading').style.display='none';
     updateRecipeGenBtn();
   }
@@ -1291,8 +1311,9 @@ async function generate(mode){
     let text;
     if(provider==='gemini'){
       const parts=[{text:prompt}]; recipeImages.forEach(img=>parts.push({inline_data:{mime_type:img.mime,data:img.base64}}));
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.7}})});
-      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`);}
+      const setStatus=msg=>{const el=document.getElementById('recipe-loading-text');if(el)el.textContent=msg;};
+      const res=await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.7}})},setStatus);
+      if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(res.status===503?'サーバーが混雑中です。しばらく待ってから再試行してください。':`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`);}
       const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
     } else {
       const content=[{type:'text',text:prompt}]; recipeImages.forEach(img=>content.push({type:'image_url',image_url:{url:`data:${img.mime};base64,${img.base64}`}}));
@@ -1422,9 +1443,10 @@ ${stepNote}
     let text;
     const provider = LS.get('provider', 'gemini');
     if (provider === 'gemini') {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})});
-      if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`); }
+      const setStatus=msg=>{const el=document.getElementById('recipe-loading-text');if(el)el.textContent=msg;};
+      const res = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.7}})},setStatus);
+      if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(res.status===503?'サーバーが混雑中です。しばらく待ってから再試行してください。':`Gemini APIエラー(${res.status}): ${e?.error?.message||''}`); }
       const d=await res.json(); text=d.candidates?.[0]?.content?.parts?.[0]?.text;
     } else {
       const res = await fetch('https://api.openai.com/v1/chat/completions',
@@ -1439,6 +1461,7 @@ ${stepNote}
     document.getElementById('recipe-error').textContent = e.message || '不明なエラー';
     document.getElementById('recipe-error').style.display = 'block';
   } finally {
+    const el=document.getElementById('recipe-loading-text');if(el)el.textContent='AIがレシピを考えています…';
     document.getElementById('recipe-loading').style.display = 'none';
     updateRecipeGenBtn();
   }
@@ -1496,6 +1519,9 @@ function isSameIng(a, b) {
   const na = normalizeIng(a), nb = normalizeIng(b);
   // 正規化後に完全一致
   if (na === nb) return true;
+  // 双方向部分一致（2文字以上の短い方が長い方に含まれる）
+  const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na];
+  if (shorter.length >= 2 && longer.includes(shorter)) return true;
   // LIFESPAN_DB の同エントリにマッチ（原文 OR 正規化後で両方試す）
   const ea = LIFESPAN_DB.find(e => e.name.test(a) || e.name.test(na));
   const eb = LIFESPAN_DB.find(e => e.name.test(b) || e.name.test(nb));
@@ -1556,7 +1582,7 @@ function addToShoppingListBatch(names) {
   let added = 0, duped = 0;
   names.forEach((raw, offset) => {
     const n = raw.trim(); if (!n) return;
-    const existing = list.find(i => i.name === n && !i.checked);
+    const existing = list.find(i => !i.checked && isSameIng(i.name, n));
     if (existing) { existing.dupCount = (existing.dupCount||0)+1; duped++; return; }
     list.push({ id: Date.now().toString(36) + offset + Math.random().toString(36).slice(2), name: n, checked: false, dupCount: 0 });
     added++;
