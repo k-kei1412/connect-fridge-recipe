@@ -99,6 +99,10 @@
     #panel-fridge .fridge-main { max-width: 640px; margin: 0 auto; padding: 12px; }
     #panel-recipe .recipe-main { max-width: 640px; margin: 0 auto; padding: 12px; }
     @media(max-width:480px) { .form-row, .form-row-3 { grid-template-columns: 1fr; } }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::marker { display: none; }
+    .details-chevron { transition: transform 0.2s ease; }
+    details[open] .details-chevron { transform: rotate(180deg); }
   </style>
 </head>
 <body>
@@ -338,11 +342,23 @@
 <!-- ══════════ SETTINGS PANEL ══════════ -->
 <div id="panel-settings" class="panel">
   <div style="background:#6366f1;color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50;">
-    <button onclick="history.back?switchPanel(document._lastPanel||'fridge'):switchPanel('fridge')" id="settings-back-btn"
-      style="background:rgba(255,255,255,.18);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" title="戻る">‹</button>
+    <button id="settings-back-btn" style="background:rgba(255,255,255,.18);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" title="戻る">‹</button>
     <h1 style="font-size:16px;font-weight:700;">⚙️ 設定</h1>
   </div>
-  <div style="max-width:640px;margin:0 auto;padding:12px;">
+  <!-- タブバー -->
+  <div style="display:flex;background:#fff;border-bottom:2px solid #e5e7eb;position:sticky;top:52px;z-index:49;">
+    <button id="stab-key" onclick="switchSettingsTab('key')"
+      style="flex:1;padding:13px 8px;border:none;border-bottom:3px solid #6366f1;background:transparent;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#6366f1;transition:all .15s;">
+      🔑 APIキー
+    </button>
+    <button id="stab-usage" onclick="switchSettingsTab('usage')"
+      style="flex:1;padding:13px 8px;border:none;border-bottom:3px solid transparent;background:transparent;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;color:#94a3b8;transition:all .15s;">
+      📖 使用方法
+    </button>
+  </div>
+
+  <!-- ── APIキー タブ ── -->
+  <div id="scontent-key" style="max-width:640px;margin:0 auto;padding:12px;">
     <div class="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm mx-auto my-4">
       <h2 class="text-lg font-bold text-slate-900 mb-4 flex items-center">
         <i class="fa-solid fa-key text-amber-500 mr-2"></i>Gemini APIキーの設定・作成方法
@@ -361,10 +377,7 @@
             </a> にアクセスし、Googleアカウントでログインします。
           </li>
           <li>
-            画面<span class="font-bold text-slate-900">左上の「≡」</span>をクリックして<span class="font-bold text-slate-900">「Dashboard」</span>を選択し、<span class="font-bold text-slate-900">「APIキー」</span>をクリックします。
-          </li>
-          <li>
-            画面右上にある<span class="font-bold text-slate-900">「APIキーを作成 (Create API key)」</span>をクリックします。
+            画面左側（または右上）にある<span class="font-bold text-slate-900">「APIキーを取得 (Get API key)」</span>または<span class="font-bold text-slate-900">「APIキーを作成 (Create API key)」</span>という青いボタンをクリックします。
           </li>
           <li>
             <span class="font-bold text-slate-900">「既存のプロジェクトを選択 (Create API key in an existing project)」</span>、または「+プロジェクトの作成」を選び、任意の名前を設定します。
@@ -372,15 +385,11 @@
               ⚠️ ※「プロジェクトの上限エラー」が出る場合は、新規作成ではなく、リストにある「既存のプロジェクト」をどれか一つ選択してください。
             </p>
           </li>
-          <li>
-            <span class="font-bold text-slate-900">「キーを作成 (Create API key)」</span>をクリックします。
-          </li>
-          <li>
-            生成された<span class="font-bold text-slate-900">「キーをコピー (Copy)」</span>をクリックして取得完了です。
-          </li>
+          <li><span class="font-bold text-slate-900">「キーを作成 (Create API key)」</span>をクリックします。</li>
+          <li>生成された<span class="font-bold text-slate-900">「キーをコピー (Copy)」</span>をクリックして取得完了です。</li>
         </ol>
       </div>
-      <div class="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 text-xs text-slate-700 space-y-2">
+      <div class="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 text-xs text-slate-700 space-y-2 mb-5">
         <h3 class="font-bold text-emerald-900 flex items-center">
           <i class="fa-solid fa-circle-check text-emerald-600 mr-1.5"></i>アプリへの登録方法
         </h3>
@@ -389,7 +398,7 @@
           2. <span class="font-bold text-emerald-800">「保存する」</span>ボタンをクリックすれば設定完了です。
         </p>
       </div>
-      <div class="mt-6 pt-4 border-t border-slate-100 space-y-3">
+      <div class="pt-4 border-t border-slate-100 space-y-3">
         <div>
           <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">AIプロバイダー</label>
           <select id="settings-provider" onchange="onSettingsProviderChange()"
@@ -411,6 +420,111 @@
         <p id="settings-save-ok" style="display:none;font-size:12px;color:#16a34a;font-weight:600;text-align:center;">✓ 保存しました！</p>
       </div>
     </div>
+  </div>
+
+  <!-- ── 使用方法 タブ ── -->
+  <div id="scontent-usage" style="display:none;max-width:640px;margin:0 auto;padding:12px 12px 24px;">
+
+    <!-- 冷蔵庫管理アプリ -->
+    <div style="background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #0ea5e9;">
+      <h2 style="font-size:15px;font-weight:700;color:#0ea5e9;margin-bottom:14px;display:flex;align-items:center;gap:6px;">🥦 冷蔵庫管理アプリ</h2>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">1</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e293b;line-height:1.5;">カメラで冷蔵庫の食材を撮影 →「✨ Geminiで解析する」を押す</div>
+            <div style="font-size:12px;color:#64748b;margin-top:6px;background:#f0f9ff;border-radius:8px;padding:8px 10px;line-height:1.7;border:1px solid #bae6fd;">
+              📝 うまく撮れない場合は「手入力」タブで食材を追加<br>
+              🗓 購入日の入力は必須・店舗名は任意で入力できます<br>
+              ⚠️ 登録されていない食材は日持ち日数を自分で入力してください
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">2</span>
+          <div style="font-size:13px;color:#1e293b;line-height:1.6;"><span style="font-weight:700;">✂️ ボタン</span>を押すと食材をカットした状態に切り替わり、期限が短くなります</div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#0ea5e9;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">3</span>
+          <div style="font-size:13px;color:#1e293b;line-height:1.6;"><span style="font-weight:700;">「−」ボタン</span>で食材の個数を1つずつ減らせます</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- レシピ提案AI -->
+    <div style="background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #f97316;">
+      <h2 style="font-size:15px;font-weight:700;color:#f97316;margin-bottom:14px;display:flex;align-items:center;gap:6px;">🍳 レシピ提案AI</h2>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#f97316;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">1</span>
+          <div style="font-size:13px;color:#1e293b;line-height:1.6;">食材の写真を撮影し、足りない食材は<span style="font-weight:700;">食材リスト</span>に直接入力</div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#f97316;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">2</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e293b;">リクエスト・コメントを入力</div>
+            <div style="font-size:12px;color:#64748b;margin-top:6px;line-height:1.7;">料理名や好み・条件を自由に記入できます<br>
+              <span style="color:#475569;">例: フレンチ風に・鶏肉を必ず使って・15分以内で</span><br>
+              <span style="color:#ef4444;font-weight:600;">🚫 アレルギー・除外食材は専用欄に入力してください</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#f97316;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">3</span>
+          <div style="font-size:13px;color:#1e293b;line-height:1.6;"><span style="font-weight:700;">人数</span>を選択してください</div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#f97316;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">4</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e293b;">食材モードと出力タイプを選択</div>
+            <div style="font-size:12px;color:#64748b;margin-top:6px;line-height:1.8;">
+              🥦 冷蔵庫中心 ／ 📝 入力した食材のみ<br>
+              🍳 レシピを生成 ／ 🍱 弁当おかず
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#f97316;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">5</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e293b;">「▶ 生成する」を押すとAIがメニューを考えます</div>
+            <div style="font-size:12px;color:#b45309;margin-top:6px;background:#fff7ed;border-radius:8px;padding:7px 10px;border:1px solid #fed7aa;">
+              ⚠️ エラー503が出た場合は少し時間をおいてから再度タップしてください
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#f97316;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">6</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e293b;">「🍳 これを作る！」で冷蔵庫と連動</div>
+            <div style="font-size:12px;color:#64748b;margin-top:6px;line-height:1.7;">使用した食材の個数が自動で減ります。不足食材は<span style="font-weight:600;">買い物リスト</span>に自動登録されます</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <span style="background:#f97316;color:#fff;border-radius:50%;min-width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;">7</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#1e293b;">レシピの保存</div>
+            <div style="font-size:12px;color:#64748b;margin-top:6px;background:#fafafa;border-radius:8px;padding:8px 10px;line-height:1.9;border:1px solid #f1f5f9;">
+              ⭐ まとめて保存 → 右上「すべて保存」をタップ<br>
+              ⭐ 1件だけ保存 → 各レシピ下部「⭐ 保存」をタップ<br>
+              📚 確認 → 上部「保存済み」タブから閲覧できます
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -508,9 +622,21 @@ function switchPanel(panel) {
     document.getElementById('api-key-input').value = k || '';
     document.getElementById('settings-provider').value = LS.get('provider','gemini');
     document.getElementById('settings-save-ok').style.display = 'none';
-    // 戻るボタンにパネルを紐付け
     document.getElementById('settings-back-btn').onclick = () => switchPanel(_lastPanel);
+    switchSettingsTab('key');
   }
+}
+
+/* ═══ SETTINGS TABS ═══ */
+function switchSettingsTab(tab) {
+  document.getElementById('scontent-key').style.display   = tab === 'key'   ? '' : 'none';
+  document.getElementById('scontent-usage').style.display = tab === 'usage' ? '' : 'none';
+  ['key','usage'].forEach(t => {
+    const btn = document.getElementById('stab-'+t);
+    const on  = t === tab;
+    btn.style.borderBottomColor = on ? '#6366f1' : 'transparent';
+    btn.style.color             = on ? '#6366f1' : '#94a3b8';
+  });
 }
 
 /* ═══ SHARED UTILS ═══ */
