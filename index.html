@@ -1900,11 +1900,6 @@ function saveApiKey() {
   const t=new Date();
   document.getElementById('dateInput').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
   refreshStockList(); updateBadge(); updateRecipeGenBtn(); updateShopBadge(); rescheduleShopTimers();
-  // recipe-loading の表示変化を監視して広告を連動
-  const _rl = document.getElementById('recipe-loading');
-  if (_rl) new MutationObserver(() => {
-    _rl.style.display !== 'none' ? showRecipeAd() : hideRecipeAd();
-  }).observe(_rl, { attributes: true, attributeFilter: ['style'] });
   document.getElementById('sel-provider').value=LS.get('provider','gemini');
   document.getElementById('inp-key').value=LS.get('api_key','');
   updateFridgeOnlyBtn(getActiveIngredients().length>0);
