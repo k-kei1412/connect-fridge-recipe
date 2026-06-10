@@ -1,0 +1,17 @@
+{
+  "name": "冷蔵庫管理 & レシピAI",
+  "short_name": "冷蔵庫レシピ",
+  "description": "冷蔵庫在庫管理とAIレシピ提案",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "fridge_recipe_icon_2.png",
+      "sizes": "192x192 512x512 1920x1920",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

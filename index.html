@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>冷蔵庫管理 &amp; レシピAI</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="fridge_recipe_icon_2.png">
+  <link rel="icon" type="image/png" href="fridge_recipe_icon_2.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="冷蔵庫レシピ">
+  <meta name="theme-color" content="#f97316">
   <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -287,6 +294,18 @@
       <!-- 実行ボタン -->
       <button id="gen-btn" onclick="handleGenerate()" disabled
         style="width:100%;padding:14px;background:#f97316;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;transition:background .2s;">▶ 生成する</button>
+
+      <!-- ── AdSense 広告ユニット（生成中のみ表示） ── -->
+      <div id="recipe-ad-wrap" style="display:none;text-align:center;margin:4px 0 10px;padding:8px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden;">
+        <p style="font-size:10px;color:#94a3b8;margin-bottom:4px;">広告</p>
+        <ins class="adsbygoogle"
+             style="display:block"
+             data-ad-client="ca-pub-4641874788276111"
+             data-ad-slot="YOUR_AD_SLOT_ID"
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+      </div>
+
       <div id="recipe-loading" style="display:none;text-align:center;padding:32px;">
         <div class="recipe-spinner" style="width:40px;height:40px;border-width:4px;"></div>
         <p id="recipe-loading-text" style="margin-top:12px;color:#64748b;font-size:13px;">AIがレシピを考えています…</p>
@@ -628,6 +647,21 @@ function switchPanel(panel) {
     document.getElementById('settings-back-btn').onclick = () => switchPanel(_lastPanel);
     switchSettingsTab('key');
   }
+}
+
+/* ═══ RECIPE AD ═══ */
+let _adPushed = false;
+function showRecipeAd() {
+  const wrap = document.getElementById('recipe-ad-wrap');
+  if (!wrap) return;
+  wrap.style.display = 'block';
+  if (!_adPushed) {
+    try { (adsbygoogle = window.adsbygoogle || []).push({}); _adPushed = true; } catch(e) {}
+  }
+}
+function hideRecipeAd() {
+  const wrap = document.getElementById('recipe-ad-wrap');
+  if (wrap) wrap.style.display = 'none';
 }
 
 /* ═══ SETTINGS TABS ═══ */
@@ -1493,7 +1527,9 @@ function saveRecipe(index){
   if(savedIndices.has(index)||!currentRecipes[index])return;
   const history=LS.get('recipe_history',[]); const now=new Date();
   const tags=(currentRecipes[index].match(/【([^】]+)】/g)||[]).map(m=>m.replace(/[【】]/g,'').trim()).slice(0,3);
-  history.unshift({id:(now.getTime()+index).toString(),date:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),content:currentRecipes[index],tags,servings,mode:currentMode||'recipe'});
+  const headingMatch=currentRecipes[index].match(/^##\s+(.+)$/m);
+  const name=(headingMatch?extractDishName(headingMatch[1].trim()):'')||(currentMode==='bento'?'弁当おかず':'レシピ');
+  history.unshift({id:(now.getTime()+index).toString(),name,date:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),content:currentRecipes[index],tags,servings,mode:currentMode||'recipe'});
   LS.set('recipe_history',history.slice(0,50)); savedIndices.add(index);
   const btn=document.getElementById(`save-btn-${index}`); if(btn){btn.textContent='✓ 保存済み';btn.disabled=true;}
   updateBadge(); showToast('⭐ 保存しました！');
@@ -1505,13 +1541,16 @@ function renderHistory(){
   const history=LS.get('recipe_history',[]); const el=document.getElementById('history-list');
   if(!history.length){el.innerHTML='<div style="text-align:center;padding:40px;color:#94a3b8;font-size:14px;">保存済みレシピはありません</div>';return;}
   el.innerHTML=history.map(entry=>{
-    const tagHtml=(entry.tags||[]).map(t=>`<span style="font-size:11px;background:#fff7ed;color:#f97316;border:1px solid #fed7aa;border-radius:999px;padding:1px 6px;">${t}</span>`).join(' ');
+    const displayName=entry.name||(entry.tags&&entry.tags[0])||'レシピ';
+    const escapedName=displayName.replace(/\\/g,'\\\\').replace(/`/g,'\\`').replace(/'/g,"\\'");
     return `<div class="recipe-card">
-      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleHistoryItem('h-${entry.id}','a-${entry.id}')">
-        <span style="flex:1;font-weight:700;font-size:14px;">${entry.mode==='bento'?'🍱':'🍳'} ${entry.date}</span>
-        <span id="a-${entry.id}">▼</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="toggleHistoryItem('h-${entry.id}','a-${entry.id}')">
+          <span style="font-size:13px;background:#fff7ed;color:#f97316;border:1px solid #fed7aa;border-radius:999px;padding:4px 12px;font-weight:700;">${entry.mode==='bento'?'🍱':'🍳'} ${displayName}</span>
+        </div>
+        <button onclick="renameHistoryItem('${entry.id}','${escapedName}')" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;color:#94a3b8;" title="名前を編集">✏️</button>
+        <span id="a-${entry.id}" style="cursor:pointer;" onclick="toggleHistoryItem('h-${entry.id}','a-${entry.id}')">▼</span>
       </div>
-      ${tagHtml?`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">${tagHtml}</div>`:''}
       <div id="h-${entry.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #f3f4f6;">
         <div style="font-size:14px;line-height:1.7;">${addGoogleImageLinks(marked.parse(entry.content))}</div>
         <button onclick="deleteHistoryItem('${entry.id}')" style="margin-top:8px;font-size:12px;color:#ef4444;background:none;border:none;cursor:pointer;">🗑️ 削除</button>
@@ -1521,6 +1560,7 @@ function renderHistory(){
 }
 function toggleHistoryItem(bodyId,arrId){ const body=document.getElementById(bodyId); const arr=document.getElementById(arrId); const open=body.style.display==='none'; body.style.display=open?'':'none'; if(arr)arr.textContent=open?'▲':'▼'; }
 function deleteHistoryItem(id){ if(!confirm('このレシピを削除しますか？'))return; LS.set('recipe_history',LS.get('recipe_history',[]).filter(h=>h.id!==id)); updateBadge(); renderHistory(); }
+function renameHistoryItem(id,currentName){ const n=prompt('レシピ名を変更',currentName||''); if(n===null)return; const t=n.trim(); if(!t)return; const h=LS.get('recipe_history',[]); const i=h.findIndex(e=>e.id===id); if(i<0)return; h[i].name=t; LS.set('recipe_history',h); renderHistory(); }
 
 /* ═══ DISH NAME SEARCH ═══ */
 function updateDishNameBtn() {
@@ -1860,6 +1900,11 @@ function saveApiKey() {
   const t=new Date();
   document.getElementById('dateInput').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
   refreshStockList(); updateBadge(); updateRecipeGenBtn(); updateShopBadge(); rescheduleShopTimers();
+  // recipe-loading の表示変化を監視して広告を連動
+  const _rl = document.getElementById('recipe-loading');
+  if (_rl) new MutationObserver(() => {
+    _rl.style.display !== 'none' ? showRecipeAd() : hideRecipeAd();
+  }).observe(_rl, { attributes: true, attributeFilter: ['style'] });
   document.getElementById('sel-provider').value=LS.get('provider','gemini');
   document.getElementById('inp-key').value=LS.get('api_key','');
   updateFridgeOnlyBtn(getActiveIngredients().length>0);
